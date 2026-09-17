@@ -1,0 +1,106 @@
+# ============================================================================
+# TC-H 反幻觉专项种子集（T04 / AC-B13/B14 / Q10，≥20 条）
+# 每条：id / reply（模型回复）/ executed（本次成功的工具调用）/ expected（期望判定）
+# expected 取值：PASSED / CLAIM_UNSUPPORTED / VALUE_NOT_TRACEABLE
+# 说明：executed 为空表示"无成功工具记录"；manage_pet_profile 语义见 ActionClaimExtractor。
+# ============================================================================
+cases:
+  # ---- 应通过：纯闲聊 / 无动作声明 ----
+  - id: TC-H-01
+    reply: "今天天气不错呀，你最近好吗？"
+    executed: []
+    expected: PASSED
+  - id: TC-H-02
+    reply: "我可以帮你记录宠物信息，告诉我它叫什么名字就好。"
+    executed: []
+    expected: PASSED
+  - id: TC-H-03
+    reply: "它叫什么名字呀？"
+    executed: []
+    expected: PASSED
+
+  # ---- 应通过：有成功记录支撑且数值可回溯 ----
+  - id: TC-H-04
+    reply: "好嘞，咪咪的档案我已经记下啦。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"咪咪\"}" ]
+    expected: PASSED
+  - id: TC-H-05
+    reply: "已为你记录好，体重 12 公斤。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"weight_kg\":12}" ]
+    expected: PASSED
+  - id: TC-H-06
+    reply: "已为你保存好豆豆的档案。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"豆豆\"}" ]
+    expected: PASSED
+
+  # ---- 应拦截：声称执行但无成功记录（执行性幻觉） ----
+  - id: TC-H-07
+    reply: "已为你查询到物流：您的包裹预计明天送达。"
+    executed: []
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-08
+    reply: "已为你查询到物流，正在派送中。"
+    executed: []
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-09
+    reply: "已为你规划好路线，全程约 30 分钟。"
+    executed: []
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-10
+    reply: "已经帮你记录好宠物档案啦。"
+    executed: []
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-11
+    reply: "已为你保存好，请放心。"
+    executed: []
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-12
+    reply: "已为你更新了豆豆的信息。"
+    executed: []
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-13
+    reply: "已为你删除咪咪的档案。"
+    executed: []
+    expected: CLAIM_UNSUPPORTED
+
+  # ---- 应拦截：工具失败但模型声称成功 ----
+  - id: TC-H-14
+    reply: "已为你记录好宠物档案。"
+    executed: [ "manage_pet_profile:FAILED:{\"message\":\"write failed\"}" ]
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-15
+    reply: "已经帮你保存好了。"
+    executed: [ "manage_pet_profile:TIMEOUT:{}" ]
+    expected: CLAIM_UNSUPPORTED
+
+  # ---- 应拦截：数值/实体不可回溯（事实性幻觉） ----
+  - id: TC-H-16
+    reply: "已为你记录好，体重 12 公斤。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"咪咪\"}" ]
+    expected: VALUE_NOT_TRACEABLE
+  - id: TC-H-17
+    reply: "已为你记录好，生日 2099-01-01。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"咪咪\"}" ]
+    expected: VALUE_NOT_TRACEABLE
+  - id: TC-H-18
+    reply: "已为你保存档案，年龄 99 岁。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"旺财\"}" ]
+    expected: VALUE_NOT_TRACEABLE
+
+  # ---- 边界：多声明中一条无支撑 → 整条拦截（保守策略） ----
+  - id: TC-H-19
+    reply: "好嘞，咪咪的档案我已经记下啦。另外已为你查询到物流：明天送达。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"咪咪\"}" ]
+    expected: CLAIM_UNSUPPORTED
+  - id: TC-H-20
+    reply: "已为你保存好，档案里体重 8 公斤。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"豆豆\"}" ]
+    expected: VALUE_NOT_TRACEABLE
+  - id: TC-H-21
+    reply: "已经帮你记录好啦，咪咪一岁啦。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"咪咪\",\"age\":1}" ]
+    expected: PASSED
+  - id: TC-H-22
+    reply: "已为你记录好，咪咪是只猫。"
+    executed: [ "manage_pet_profile:SUCCESS:{\"pet_name\":\"咪咪\",\"pet_type\":\"猫\"}" ]
+    expected: PASSED
