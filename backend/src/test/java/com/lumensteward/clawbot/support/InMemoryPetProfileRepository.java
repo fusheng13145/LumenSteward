@@ -71,6 +71,15 @@ public class InMemoryPetProfileRepository implements PetProfileRepository {
     }
 
     @Override
+    public Optional<PetProfileEntity> findLiveById(Long id) {
+        PetProfileEntity entity = id == null ? null : store.get(id);
+        if (entity != null && isLive(entity)) {
+            return Optional.of(entity);
+        }
+        return Optional.empty();
+    }
+
+    @Override
     public int updateById(PetProfileEntity entity) {
         if (entity.getId() != null && store.containsKey(entity.getId())) {
             entity.setUpdatedAt(LocalDateTime.now());
