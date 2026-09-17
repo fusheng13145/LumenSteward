@@ -1,0 +1,88 @@
+name: CI
+
+# 流水线门禁（AC-F2 / NFR-MA-09 / G-28）
+# 固定工具链版本以保证可复现：Java 17、Node 20、Maven 3.9。
+# 四环节（构建 / 单测 / 类型检查 / 依赖扫描）任一失败即阻断合并。
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-build-test:
+    name: 后端 · 构建 + 单元测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          maven-version: '3.9.15'
+          cache: maven
+      - name: 编译、单测与打包
+        run: mvn -B -ntp clean verify
+
+  frontend-typecheck-build:
+    name: 前端 · 类型检查 + 构建
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: 安装依赖（严格锁定）
+        run: npm ci --no-fund
+      - name: 类型检查（vue-tsc --noEmit，G-28）
+        run: npm run type-check
+      - name: 生产构建
+        run: npm run build
+
+  dependency-scan:
+    name: 依赖漏洞扫描
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          maven-version: '3.9.15'
+          cache: maven
+      - name: OWASP 依赖检查（后端，CVSS ≥ 7 阻断）
+        working-directory: backend
+        run: mvn -B -ntp org.owasp:dependency-check-maven:check -DfailBuildOnCVSS=7
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+      - name: 配置 Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm 审计（前端，high 及以上阻断）
+        working-directory: frontend
+        run: npm audit --audit-level=high

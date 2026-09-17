@@ -1,0 +1,142 @@
+%% Claw 助手（LumenSteward）MVP 时序图（Sequence Diagrams）
+%% 来源：docs/MVP架构设计与任务分解.md 第 6 章
+%% 说明：本文件含 3 张时序图，分别以注释分隔：(a) 消息主链路 (b) 执行一致性校验拦截 (c) Mock/Real 切换与 Startup Doctor
+
+%% ============================================================
+%% (a) 消息主链路全流程（Mock 通道 + 真实工具写库）
+%% ============================================================
+sequenceDiagram
+    autonumber
+    participant U as 微信用户(Mock 发送器)
+    participant CB as WechatCallbackController
+    participant VF as WechatSignatureVerifier
+    participant DD as DedupService
+    participant PR as WechatMessageParser
+    participant DISP as MessageDispatcher
+    participant ENG as AgentOrchestrator
+    participant CTX as RedisContextStore
+    participant LLM as MockLlmClient
+    participant TR as ToolRegistry
+    participant PET as ManagePetProfileTool
+    participant DBS as PetProfileService/MySQL
+    participant CHK as ConsistencyChecker
+    participant SAF as ContentSafetyService
+    participant LOG as ToolCallLogService/MySQL
+    participant WMS as WechatMessageService
+    participant WXG as WechatTransport(Mock/Real)
+
+    U->>CB: POST /api/wx/callback (signature,timestamp,nonce,XML)
+    CB->>VF: verify(signature,timestamp,nonce,null)
+    alt 验签失败 / 时间窗超限
+        VF-->>CB: 抛异常(403)
+        CB-->>U: 拒绝 + WARN 安全日志(含IP,不含报文明文)
+    else 验签通过
+        CB->>DD: markIfAbsent(MsgId)
+        alt MsgId 重复
+            DD-->>CB: false
+            CB-->>U: 200 幂等丢弃(不重复业务处理)
+        else 首次
+            DD-->>CB: true
+            CB->>PR: parse(rawBody,"text")
+            PR-->>CB: InternalMessage(openid,text,msgId)
+            CB->>DISP: dispatch(msg)
+            DISP->>ENG: run(OrchestrationRequest)
+            ENG->>CTX: load(openid)
+            CTX-->>ENG: history
+            ENG->>ENG: trim(history,8000,1000) 引 9.4.4
+            loop Agent Loop (<=5 轮, SC-01)
+                ENG->>LLM: chat(messages, enabledSchemas)
+                LLM-->>ENG: ChatResult(toolCalls 或 content)
+                alt 无 tool_calls
+                    ENG->>ENG: break
+                else 有 tool_calls(截断至 3, SC-02)
+                    ENG->>TR: find("manage_pet_profile")
+                    TR-->>ENG: Tool
+                    ENG->>ENG: schemaValid(args)
+                    ENG->>PET: execute(ToolContext,args)
+                    PET->>DBS: 事务: 活记录查重 + CRUD(唯一索引兜底)
+                    DBS-->>PET: 结果/档案快照
+                    PET-->>ENG: ToolResult
+                    ENG->>LOG: logEnd(record,result) 同步落库(ADR-003)
+                    ENG->>LLM: 回注 role=tool(成功/失败均回注, BR-10)
+                end
+            end
+            ENG->>SAF: review(reply) Fail-Closed 引 BR-12
+            SAF-->>ENG: SafetyVerdict
+            ENG->>CHK: check(reply, executedTools)
+            CHK-->>ENG: ConsistencyVerdict
+            ENG-->>DISP: OrchestrationResult(reply,state,records)
+            DISP->>WMS: handleInboundWithReceipt(msg,reply)
+            WMS->>WXG: 被动回复/客服消息
+            WMS->>LOG: 落库 wx_message(role=assistant, send_status=1)
+            CB-->>U: 200 OK
+        end
+    end
+
+%% ============================================================
+%% (b) 执行一致性校验触发拦截（AC-B13 / 9.4.5 / BR-04）
+%% ============================================================
+sequenceDiagram
+    autonumber
+    participant ENG as AgentOrchestrator
+    participant LLM as MockLlmClient(脚本:声称已查物流)
+    participant LOG as ToolCallLogService
+    participant CHK as RuleBasedConsistencyChecker
+    participant EXT as ActionClaimExtractor
+    participant FB as FallbackService
+    participant WMS as WechatMessageService
+
+    Note over LLM: 本链路未注册 query_express(PRD N-5)，模型却输出"已为你查询到物流轨迹，包裹正在派送"
+    ENG->>LLM: chat(messages, tools=[manage_pet_profile])
+    LLM-->>ENG: content="已为你查询到物流轨迹，包裹正在派送" (无 tool_calls)
+    ENG->>LOG: 查询本次 traceId 的 executedTools
+    LOG-->>ENG: [] (本次无任何成功工具记录)
+    ENG->>CHK: check(reply, [])
+    CHK->>EXT: extractActionClaims(reply)
+    EXT-->>CHK: claims=[{text:"已查询到物流轨迹", keywords:[查询,物流,轨迹]}]
+    CHK->>CHK: 逐条校验 supporting(status=SUCCESS) == 空集
+    CHK-->>ENG: ConsistencyVerdict(passed=false, reason=CLAIM_UNSUPPORTED)
+    ENG->>FB: render(EXECUTION_HALLUCINATION)
+    FB-->>ENG: "抱歉，我暂时无法获取该项信息，请稍后重试"
+    ENG->>LOG: 写 fallback_reason="声称执行但无成功记录"(BR-24 非空)
+    ENG-->>WMS: 拦截后的诚实文案
+    WMS-->>WMS: 对外泄漏 = 0 (TC-H 种子 >=20 次)
+    Note over CHK: 数值/实体类声明额外走 traceable(value, resultJson) 校验<br/>数值不可回溯 → VALUE_NOT_TRACEABLE 同样拦截
+
+%% ============================================================
+%% (c) Mock/Real 切换与 Startup Doctor（AC-D2 / AC-D3 / AC-D4）
+%% ============================================================
+sequenceDiagram
+    autonumber
+    participant OP as 运维
+    participant APP as Spring Boot 启动
+    participant PVC as PlaceholderConfigValidator
+    participant ABR as AdminBootstrapRunner
+    participant DOC as StartupDoctor
+    participant LLMF as LlmClientFactory(by llm.provider)
+    participant WXF as WechatTransportFactory(by wx.mock.enabled)
+    participant MYSQL as MySQL
+    participant REDIS as Redis
+    participant API as DoctorController
+
+    OP->>APP: 启动 (spring.profiles.active=prod)
+    APP->>PVC: ApplicationRunner#run (SUP-06)
+    alt 关键配置为占位符/缺失 (如 llm.api-key=your_api_key)
+        PVC-->>APP: 抛异常 → 启动失败，列出缺失项(AC-D2/AC-F3)
+    else local profile
+        PVC-->>APP: 显著 WARN，继续启动
+    end
+    APP->>ABR: ApplicationRunner#run (Q7)
+    ABR->>MYSQL: 若 password_hash='__ENV_INJECTED__' → 以 ADMIN_INIT_PASSWORD 覆写
+    APP->>LLMF: 按 llm.provider 装配 (mock|real)
+    Note over LLMF: MockLlmClient / OpenAiCompatibleLlmClient<br/>同一 LlmClient 契约，切换零代码改动(AC-D3/G-2)
+    APP->>WXF: 按 wx.mock.enabled 装配 (MockWechatTransport|RealWechatTransport)
+    APP->>DOC: 启动后自检(diagnose)
+    DOC->>MYSQL: SELECT 1 / 迁移版本
+    DOC->>REDIS: PING
+    DOC->>LLMF: provider() + 配置校验
+    DOC->>WXF: transportMode() + 配置校验
+    DOC-->>APP: DoctorReport(整体结论 + 各项)
+    OP->>API: GET /api/doctor
+    API->>DOC: diagnose()
+    API-->>OP: {DB,Redis,微信通道,LLM,TTS,物流,地图}[连通性+模式(mock/real/未配置)+配置校验结论]

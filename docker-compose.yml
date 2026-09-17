@@ -1,0 +1,86 @@
+# ============================================================================
+# 本地一键编排：MySQL 8 + Redis 7 + 后端 + 前端
+# 密钥一律经环境变量注入（BR-20）；复制 .env.example 为 .env 后按需填写。
+# ============================================================================
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: clawbot-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-1234}
+      MYSQL_DATABASE: ${DB_NAME:-clawbot}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-1234}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    container_name: clawbot-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+    container_name: clawbot-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-clawbot}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-1234}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # 微信 / LLM 密钥（禁止明文入库；缺省为空，由启动自检校验）
+      WX_TOKEN: ${WX_TOKEN:-}
+      WX_APP_ID: ${WX_APP_ID:-}
+      WX_APP_SECRET: ${WX_APP_SECRET:-}
+      WX_ENCODING_AES_KEY: ${WX_ENCODING_AES_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      ADMIN_INIT_PASSWORD: ${ADMIN_INIT_PASSWORD:-}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: clawbot-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_PORT:-80}:80"
+
+volumes:
+  mysql-data:
+  redis-data:
