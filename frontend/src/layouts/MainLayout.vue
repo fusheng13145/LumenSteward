@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { hasMenuPermission } from '@/config/permissions'
 import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
 import { ROLE_LABELS } from '@/utils/constants'
 
 /**
- * 后台主布局骨架（T01）：顶部栏 + 侧边菜单 + 内容区。
+ * 后台主布局（T05）：顶部栏 + 侧边菜单 + 内容区。
+ *
  * 菜单按 `hasMenuPermission` 过滤（G-27），权限字符串不在此硬编码。
+ * 首次进入时拉取 `/api/auth/info` 以恢复角色与权限（刷新页面后权限守卫依赖它）。
  */
 const auth = useAuthStore()
+const configStore = useConfigStore()
 const router = useRouter()
 
 interface MenuItem {
@@ -36,8 +40,19 @@ const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || '衔光管家'
 
 async function handleLogout(): Promise<void> {
   await auth.logout()
+  configStore.reset()
   await router.replace({ path: '/login' })
 }
+
+onMounted(async () => {
+  if (auth.isAuthenticated && !auth.username) {
+    try {
+      await auth.fetchInfo()
+    } catch {
+      // 拉取失败（如令牌过期）由 axios 拦截器统一处理跳登录
+    }
+  }
+})
 </script>
 
 <template>

@@ -26,6 +26,12 @@ async function onSubmit(): Promise<void> {
   submitting.value = true
   try {
     await auth.login({ username: form.username, password: form.password })
+    // 拉取角色与权限（主布局/守卫依赖），失败不阻断登录后的跳转
+    try {
+      await auth.fetchInfo()
+    } catch {
+      // 忽略：进入页面后主布局会再次尝试拉取
+    }
     // 保留 redirect 回跳：登录成功后返回进入登录页前的目标页面（G-24）
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
     await router.replace(redirect)

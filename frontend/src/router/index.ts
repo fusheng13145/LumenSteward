@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
  * 路由与全局守卫（9.3 / G-26）。
  *
  * meta 约定：每条路由声明 `{ title, requiresAuth, requiredPermission }`。
- * **要求**：meta 中声明的权限字段与守卫实际读取的字段同名同源（类型增强见 src/env.d.ts），
+ * **要求**：meta 中声明的权限字段与守卫实际读取的字段同名同源（类型增强见 src/types/vue-router.d.ts），
  * 否则权限会「静默失效」。后端仍独立鉴权（FR-15 验收准则②），前端守卫仅用于体验。
  */
 const routes: RouteRecordRaw[] = [
@@ -30,31 +30,43 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'users',
         name: 'users',
-        component: () => import('@/views/placeholder/index.vue'),
+        component: () => import('@/views/user/index.vue'),
         meta: { title: '用户管理', requiresAuth: true, requiredPermission: 'user:view' },
+      },
+      {
+        path: 'users/:id',
+        name: 'user-detail',
+        component: () => import('@/views/user-detail/index.vue'),
+        meta: { title: '用户详情', requiresAuth: true, requiredPermission: 'user:view' },
       },
       {
         path: 'sessions',
         name: 'sessions',
-        component: () => import('@/views/placeholder/index.vue'),
+        component: () => import('@/views/session/index.vue'),
         meta: { title: '会话监控', requiresAuth: true, requiredPermission: 'session:view' },
+      },
+      {
+        path: 'sessions/:id',
+        name: 'session-detail',
+        component: () => import('@/views/session-detail/index.vue'),
+        meta: { title: '会话详情', requiresAuth: true, requiredPermission: 'session:view' },
       },
       {
         path: 'tool-logs',
         name: 'tool-logs',
-        component: () => import('@/views/placeholder/index.vue'),
+        component: () => import('@/views/tool-log/index.vue'),
         meta: { title: '工具调用日志', requiresAuth: true, requiredPermission: 'toolLog:view' },
       },
       {
         path: 'configs',
         name: 'configs',
-        component: () => import('@/views/placeholder/index.vue'),
+        component: () => import('@/views/config/index.vue'),
         meta: { title: '系统配置', requiresAuth: true, requiredPermission: 'config:view' },
       },
       {
         path: 'audit-logs',
         name: 'audit-logs',
-        component: () => import('@/views/placeholder/index.vue'),
+        component: () => import('@/views/audit-log/index.vue'),
         meta: { title: '审计日志', requiresAuth: true, requiredPermission: 'audit:view' },
       },
     ],
@@ -62,7 +74,8 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
-    redirect: '/dashboard',
+    component: () => import('@/views/not-found/index.vue'),
+    meta: { title: '页面不存在', requiresAuth: true },
   },
 ]
 
