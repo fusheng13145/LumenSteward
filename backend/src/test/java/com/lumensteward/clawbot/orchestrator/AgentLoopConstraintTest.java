@@ -224,12 +224,13 @@ class AgentLoopConstraintTest {
         }
     }
 
-    /** 空操作的同步日志服务。 */
+    /** 空操作的同步日志服务（D3：logStart 追加 callSeq 入参）。 */
     static class NoOpToolCallLogService implements ToolCallLogService {
         @Override
-        public ToolCallRecord logStart(String traceId, String openid, Long sessionId, ToolCall call, int round) {
+        public ToolCallRecord logStart(String traceId, String openid, Long sessionId, ToolCall call,
+                                       int round, int callSeq) {
             return new ToolCallRecord(1L, traceId, openid, sessionId,
-                    call == null ? null : call.functionName(), 0, round, ToolStatus.NOT_EXECUTED,
+                    call == null ? null : call.functionName(), callSeq, round, ToolStatus.NOT_EXECUTED,
                     null, null, null, null, 0L);
         }
 
