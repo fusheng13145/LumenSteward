@@ -5,12 +5,17 @@ import com.lumensteward.clawbot.application.dispatcher.MessageHandler;
 import com.lumensteward.clawbot.application.dispatcher.handler.ImageMessageHandler;
 import com.lumensteward.clawbot.application.dispatcher.handler.TextMessageHandler;
 import com.lumensteward.clawbot.application.dispatcher.handler.VoiceMessageHandler;
+import com.lumensteward.clawbot.application.orchestrator.AgentOrchestrator;
+import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationRequest;
+import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationResult;
+import com.lumensteward.clawbot.common.enums.SessionState;
 import com.lumensteward.clawbot.infrastructure.client.wechat.model.InternalMessage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -76,19 +81,27 @@ class MessageRoutingVerificationTest {
     }
 
     @Test
-    @DisplayName("AC-A7【要求】文本消息须进入对话引擎并产出业务回复（当前恒返回 null → 失败即缺陷证据）")
+    @DisplayName("AC-A7：文本消息须真正委派对话引擎（AgentOrchestrator#run 被调用且终态作为回复返回）")
     void textMessageMustEnterDialogueEngine() {
-        // 真实 TextMessageHandler（应用运行期实际装配的 Bean）
-        TextMessageHandler real = new TextMessageHandler();
+        // 记录调用入参的编排器替身：若文本消息未触达对话引擎，captured 将保持 null
+        AtomicReference<OrchestrationRequest> captured = new AtomicReference<>();
+        AgentOrchestrator recordingOrchestrator = request -> {
+            captured.set(request);
+            return new OrchestrationResult("已登记宠物小光", SessionState.TASKING, List.of(), null, 1, 1);
+        };
+        // 真实 TextMessageHandler，但注入可记录的编排器（证明"委派"而非"返回兜底文案"）
+        TextMessageHandler real = new TextMessageHandler(recordingOrchestrator, null);
         MessageDispatcher dispatcher = new MessageDispatcher(
                 List.of(real, new ImageMessageHandler(), new VoiceMessageHandler()));
 
         String reply = dispatcher.dispatch(msg("text"));
 
-        // 期望：进入对话引擎后产出终态回复；实测为 null，说明未接入 AgentOrchestrator
-        assertThat(reply)
-                .as("文本消息应产出业务回复（进入对话引擎）；实测为 null 说明主链路未接线")
-                .isNotNull()
-                .isNotBlank();
+        // 断言 1：文本消息确实触达对话引擎，且入参报文一致（userMessage = 入站内容）
+        assertThat(captured.get())
+                .as("文本消息必须真正调用 AgentOrchestrator#run（不得以兜底文案冒充）")
+                .isNotNull();
+        assertThat(captured.get().userMessage()).isEqualTo("hi");
+        // 断言 2：对话引擎终态被作为业务回复返回
+        assertThat(reply).isEqualTo("已登记宠物小光");
     }
 }
