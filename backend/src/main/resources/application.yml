@@ -10,6 +10,11 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:local}
   main:
     lazy-initialization: false
+  autoconfigure:
+    # 排除 Redisson starter 的客户端自动装配：其空口令仍会发送 AUTH，对无口令 Redis 启动即失败；
+    # 改由 infrastructure/config/RedissonConfig 显式构建（空白口令不下发 AUTH）
+    exclude:
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
   jackson:
     # 时间统一 ISO 8601 带时区，DB/容器统一 Asia/Shanghai（8.4 / NFR-RE-09）
     time-zone: Asia/Shanghai
