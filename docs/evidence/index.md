@@ -23,8 +23,8 @@
 | AC-A4 GET `echostr` 原样回显 | 单测 + 接口报文 | `WechatAccessTest`（`echostr` 原样返回）；`e2e-smoke.ps1` AC-A4 | ✅ 单测通过 |
 | AC-A5 超窗（`now-400s`）拒绝 | 单测 | `WechatAccessTest`（±300s 时间窗，超窗拒绝并告警） | ✅ |
 | AC-A6 未知类型 `MsgType=foo` 不 500 | 单测 | `WechatAccessTest`（未知类型回落默认文本，无异常） | ✅ |
-| AC-A7 text 进入对话引擎 | 日志片段 | `AgentOrchestratorImpl` INFO 日志（模块 = dialogue-engine）；集成 `MainChainE2ETest` | ⚠️ 需运行期日志 |
-| AC-A8 先回执后推送（≤1s + 异步终态） | 单测 | `application/wechat/WechatMessageService`（回执路径与 `pushAsync`）；`WechatAccessTest` 覆盖回执分支 | ⚠️ 时延为设计保证，未做秒表实测 |
+| AC-A7 text 进入对话引擎 | 单测（组件级）+ 日志片段 | `verification/MainChainWiringVerificationTest`（真实回调→类型路由→`TextMessageHandler`→`AgentOrchestrator` 全链路：断言编排器**确被调用**且终态 assistant 落库）；运行期日志见 `AgentOrchestratorImpl` INFO（模块 = dialogue-engine） | ✅ 组件级单测通过；运行期日志【未取得证据】 |
+| AC-A8 先回执后推送（≤1s + 异步终态） | 单测（含秒表实测） | `verification/AsyncReceiptContractVerificationTest`（链路 sleep 8s：断言回调 ≤1000ms 返回回执，并经 `sendCustomerMessage` 异步推送终态）；实现见 `interfaces/wechat/WechatCallbackController#dispatchWithReceipt`（回执窗口 700ms + 有界线程池 + `WechatMessageService#pushAsync/#pushFinal`） | ✅ 单测通过（≤1s 已秒表实测） |
 | AC-A9 image 如实提示、不调视觉接口 | 单测 | `WechatAccessTest` / `ImageMessageHandler`（占位提示，无视觉外呼） | ✅ |
 | AC-A10 voice 如实提示 | 单测 | `VoiceMessageHandler`（占位提示）；`WechatMessageParserTest` 覆盖报文 | ✅ |
 
@@ -37,6 +37,7 @@
 | 内容安全 Fail-Closed | 单测 | `safety/ContentSafetyFailClosedTest`（词库不可用按 Fail-Closed 处理） | ✅ |
 | 上下文裁剪保持 tool/assistant 配对（9.4.4） | 单测 | `context/ContextTrimPairingTest`（多预算下配对不变式） | ✅ |
 | 工具调用日志同步落库（ADR-003） | 静态核对 | `ToolCallLogServiceImpl` 无 `@Async`/Executor/MQ | ✅ 已核对 |
+| AC-B6/B7 工具调用序号 `call_seq` 递增 | 单测（组件级）+ 集成（未实跑） | `AgentOrchestratorImpl#executeOne` 以链路内序号入参 `ToolCallLogServiceImpl#logStart`（D3 修复，不再恒 0）；真实 DB 行为见 `e2e/MainChainRowEvidenceTest`（`@Tag("integration")`） | ✅ 代码级；真实 DB 行为【未实跑】 |
 
 ## 三、宠物档案真实工具（AC-C1 ~ AC-C9 / P0-09）
 
@@ -59,6 +60,7 @@
 | AC-E1 登录成功返回 JWT + 审计 | 单测 + 接口报文 | `auth/AuthServiceLockTest`（成功后写 `audit_log` 含 IP）；`e2e-smoke.ps1` AC-E1 | ⚠️ 单测通过；接口报文待启动后端 |
 | AC-E2 无 Token → 401（非 200） | 单测 + 接口报文 | `security/SecurityResponsesTest`（未认证 → 401 统一响应）；`security/JwtAuthenticationFilterTest`；`e2e-smoke.ps1` AC-E2 | ✅ 单测通过 |
 | AC-E3 OPERATOR 调配置写 → 403 | 单测 + 接口报文 | `admin/RbacPolicyTest`（OPERATOR 无 `config:write`）；`e2e-smoke.ps1` AC-E3 | ✅ 单测通过 |
+| AC-E3/NFR-SE-05 越权 403 留审计 | 代码级（D5 修复） | `infrastructure/security/RestAccessDeniedHandler`（403 同步写 `log_audit`：`reg_type=AUTH`/`action=ACCESS_DENIED`/`result=0`，含操作人/IP/best-effort） | ✅ 代码级；真实 `log_audit` 行【未取得证据】（需 DB 凭据） |
 | AC-E4 连续 5 次失败锁 15 分钟 | 单测 | `auth/AuthServiceLockTest`（`fail_count`/`locked_until` 落库，第 6 次正确口令仍拒） | ✅ |
 | AC-E9 AUDITOR 只读 / 写 403 | 单测 | `admin/RbacPolicyTest`（AUDITOR 对写接口 403、读接口可用） | ✅ |
 
@@ -124,4 +126,36 @@ Caused by: ... Error creating bean with name 'flywayInitializer' ... Unable to o
 > 对无口令 Redis 报 `ERR Client sent AUTH, but no password is set` 而启动失败。已新增
 > `infrastructure/config/RedissonConfig`（空白口令不下发 AUTH）并排除 starter 自动装配，
 > 使默认（无口令 Redis）契约可启动。属**工程修复**，非需求变更。
+
+---
+
+## 批次 D 缺陷修复（D1~D6）与证据更正
+
+> 本批针对 QA 独立验证（`docs/QA测试报告.md`）发现的问题做**源码**修复，并按诚实原则**更正此前夸大**的证据。
+
+| 缺陷 | 修复点 | 证据锚点 | 状态 |
+| --- | --- | --- | --- |
+| D1 主链路未接线（阻断） | `TextMessageHandler` 注入 `AgentOrchestrator` 并返回其终态（原仅注释、返回 null） | `verification/MainChainWiringVerificationTest`（回调入口→分发→处理器→编排器全链路，断言编排器**被调用**且终态落库） | ✅ 单测通过 |
+| D2 先回执后推送未实现（严重） | `WechatCallbackController#dispatchWithReceipt`：700ms 回执窗口 + 有界线程池；`WechatMessageService#pushAsync/#pushFinal` | `verification/AsyncReceiptContractVerificationTest`（链路 sleep 8s，回调 ≤1s 返回 + 客服消息异步推送） | ✅ 单测通过（秒表实测） |
+| D3 `call_seq` 恒 0 | `AgentOrchestratorImpl` 以链路序号入参 `ToolCallLogServiceImpl#logStart`（不再硬编码 0） | `orchestrator/AgentLoopConstraintTest`；真实 DB 见 `e2e/MainChainRowEvidenceTest` | ✅ 代码级；真实 DB 【未实跑】 |
+| D4 `wx_user` 未写入 | `WechatMessageService#upsertUser`（首交互 insert / 已存在刷新） | `verification/MainChainWiringVerificationTest`（verify insert） | ✅ 代码级；真实 DB 【未实跑】 |
+| D5 越权无审计 | `RestAccessDeniedHandler` 403 同步写 `log_audit`（best-effort） | `verification/SecurityGateVerificationTest`（403 语义） | ✅ 403 单测通过；审计真实落库 【未取得证据】 |
+| D6 LLM 异常归类过粗 | `AgentOrchestratorImpl#mapLlmReason`（TIMEOUT/UNAVAILABLE/INVALID_OUTPUT/BUDGET）+ `FallbackReason.LLM_UNAVAILABLE` | `application/fallback/*`、编排降级分支 | ✅ 代码级 |
+
+### 证据更正（此前夸大 → 现如实标注）
+
+- **AC-A7**：此前记为「`MainChainE2ETest` 覆盖」——经核对该用例**并无**「文本进入对话引擎」相关断言，属**夸大**。现更正为：以 `verification/MainChainWiringVerificationTest` 组件级实证接线；**运行期**日志【未取得证据】。
+- **AC-A8**：此前记为「已覆盖（回执分支）」——但当时 `pushAsync` 为**死代码**、回调**同步阻塞**（QA 实测 8024ms），AC-A8 **实际未实现**。现更正为：已实现（回执窗口 + 异步推送），并以 `AsyncReceiptContractVerificationTest` **秒表实测 ≤1s**。
+
+### 批次 D 实跑汇总
+
+| 项目 | 命令 | 结果 |
+| --- | --- | --- |
+| 后端编译 + 单测 | `"$MVN" -B -f backend/pom.xml clean verify` | **BUILD SUCCESS**，`Tests run: 159, Failures: 0, Errors: 0, Skipped: 0`。QA 两条原失败用例 `MessageRoutingVerificationTest#textMessageMustEnterDialogueEngine`、`AsyncReceiptContractVerificationTest#shouldReturnEarlyReceiptAndPushAsync` **均已转绿**；新增 `MainChainWiringVerificationTest` |
+
+### 未实跑 / 未取得证据（批次 D 补充）
+
+- `e2e/MainChainRowEvidenceTest`（`@Tag("integration")`）：真实 MySQL 行证据（`wx_message` 含 user+assistant、`wx_user` upsert、`log_tool_call.call_seq=1`）——**未实跑**（Docker 未运行 / MySQL 凭据不可用）。
+- `log_audit` 越权审计的真实落库——**【未取得证据】**（需 DB 凭据）。
+- 真实微信 / LLM / 物流 / 地图外呼——**【未取得证据】**（默认 Mock 通道）。
 
