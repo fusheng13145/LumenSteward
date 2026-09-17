@@ -138,6 +138,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         List<ToolCallRecord> executed = new ArrayList<>();
         int llmCalls = 0;
         int round = 0;
+        // 链路内工具调用序号（AC-B6/B7：call_seq 按实际执行顺序从 1 递增）
+        int[] callSeq = {0};
 
         // 上下文：优先使用请求携带的历史，否则从 ContextStore 载入（BR-07 按 openid 隔离）
         if (!contextStore.isAvailable()) {
@@ -161,8 +163,9 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
                 llmCalls++;
             } catch (LlmException e) {
-                log.warn("LLM 调用失败，走降级: errType={}", e.errorType());
-                return fallback(request, FallbackReason.LLM_TIMEOUT, executed, llmCalls, round);
+                FallbackReason reason = mapLlmReason(e);
+                log.warn("LLM 调用失败，走降级: errType={} reason={}", e.errorType(), reason);
+                return fallback(request, reason, executed, llmCalls, round);
             }
 
             if (response == null || !response.hasToolCalls()) {
@@ -177,7 +180,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             messages.add(ChatMessage.assistantToolCalls(calls));
 
             for (ToolCall call : calls) {
-                ToolOutcome outcome = executeOne(call, round, traceId, openid, sessionId, executed);
+                ToolOutcome outcome = executeOne(call, round, callSeq[0] + 1, traceId, openid, sessionId, executed);
+                callSeq[0]++;
                 messages.add(ChatMessage.tool(call.id(), call.functionName(), outcome.messageContent()));
                 if (outcome.interrupt()) {
                     return fallback(request, outcome.interruptReason(), executed, llmCalls, round);
@@ -194,7 +198,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
                 llmCalls++;
             } catch (LlmException e) {
-                log.warn("强制收敛调用失败: {}", e.errorType());
+                log.warn("强制收敛调用失败: errType={}", e.errorType());
                 return fallback(request, FallbackReason.FORCED_CONVERGENCE, executed, llmCalls, round);
             }
         }
@@ -240,13 +244,14 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      *
      * @param call      工具调用
      * @param round     当前轮次
+     * @param callSeq   本次链路调用序号（从 1 递增，AC-B6/B7）
      * @param traceId   链路标识
      * @param openid    用户
      * @param sessionId 会话
      * @param executed  已执行记录（收集器）
      * @return 执行产物（含回注内容与是否中断）
      */
-    private ToolOutcome executeOne(ToolCall call, int round, String traceId, String openid,
+    private ToolOutcome executeOne(ToolCall call, int round, int callSeq, String traceId, String openid,
                                    Long sessionId, List<ToolCallRecord> executed) {
         String name = call.functionName();
         JsonNode args = JsonUtils.readTree(call.argumentsJson());
@@ -256,7 +261,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         if (toolOpt.isEmpty()) {
             ToolResult result = ToolResult.notExecuted("TOOL_NOT_FOUND",
                     "工具未注册，可用工具: " + toolRegistry.names());
-            recordNotExecuted(call, round, traceId, openid, sessionId, executed, result);
+            recordNotExecuted(call, round, callSeq, traceId, openid, sessionId, executed, result);
             return new ToolOutcome(toToolContent(call.id(), name, result), false, null);
         }
         Tool tool = toolOpt.get();
@@ -266,12 +271,12 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         if (!validation.valid()) {
             ToolResult result = ToolResult.notExecuted("INVALID_ARGS",
                     "参数非法: " + validation.describe());
-            recordNotExecuted(call, round, traceId, openid, sessionId, executed, result);
+            recordNotExecuted(call, round, callSeq, traceId, openid, sessionId, executed, result);
             return new ToolOutcome(toToolContent(call.id(), name, result), false, null);
         }
 
         // 执行（同步日志：logStart → execute → logEnd，ADR-003）
-        ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round);
+        ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round, callSeq);
         long start = System.currentTimeMillis();
         ToolResult result = executeWithTimeout(tool, traceId, openid, sessionId, round, args);
         long latency = System.currentTimeMillis() - start;
@@ -290,9 +295,9 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         return new ToolOutcome(toToolContent(call.id(), name, timed), false, null);
     }
 
-    private void recordNotExecuted(ToolCall call, int round, String traceId, String openid,
+    private void recordNotExecuted(ToolCall call, int round, int callSeq, String traceId, String openid,
                                    Long sessionId, List<ToolCallRecord> executed, ToolResult result) {
-        ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round);
+        ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round, callSeq);
         toolCallLogService.logEnd(record, result);
         executed.add(record.withOutcome(result, 0L));
     }
@@ -348,10 +353,33 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         return llmProperties.model();
     }
 
+    /**
+     * 将 LLM 异常细分映射为降级原因（D6 / SRS 9.5 降级矩阵）。
+     *
+     * <p>区分：超时（{@code LLM_TIMEOUT}）、连接失败/不可用（{@code LLM_UNAVAILABLE}）、
+     * 输出格式非法（{@code LLM_INVALID_OUTPUT}）、配额超限（{@code BUDGET_EXCEEDED}）。
+     *
+     * @param e LLM 异常
+     * @return 降级原因
+     */
+    private static FallbackReason mapLlmReason(LlmException e) {
+        String type = e == null ? null : e.errorType();
+        if (type == null) {
+            return FallbackReason.LLM_UNAVAILABLE;
+        }
+        return switch (type) {
+            case "LLM_TIMEOUT" -> FallbackReason.LLM_TIMEOUT;
+            case "LLM_INVALID_OUTPUT" -> FallbackReason.LLM_INVALID_OUTPUT;
+            case "LLM_QUOTA_EXCEEDED" -> FallbackReason.BUDGET_EXCEEDED;
+            default -> FallbackReason.LLM_UNAVAILABLE;
+        };
+    }
+
     private OrchestrationResult fallback(OrchestrationRequest request, FallbackReason reason,
                                          List<ToolCallRecord> executed, int llmCalls, int rounds) {
         String text = fallbackService.render(reason, Map.of());
-        SessionState state = (reason == FallbackReason.LLM_TIMEOUT || reason == FallbackReason.LLM_INVALID_OUTPUT)
+        SessionState state = (reason == FallbackReason.LLM_TIMEOUT || reason == FallbackReason.LLM_UNAVAILABLE
+                || reason == FallbackReason.LLM_INVALID_OUTPUT)
                 ? SessionState.DEGRADED : SessionState.IDLE;
         log.info("编排降级 reason={} llmCalls={} rounds={}", reason, llmCalls, rounds);
         return new OrchestrationResult(text, state, executed, reason.name(), llmCalls, rounds);

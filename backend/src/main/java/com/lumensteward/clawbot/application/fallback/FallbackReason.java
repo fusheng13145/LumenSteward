@@ -16,6 +16,8 @@ public enum FallbackReason {
     UNKNOWN_MSG_TYPE,
     /** L2：LLM 超时（&gt; 15s）。 */
     LLM_TIMEOUT,
+    /** L2：LLM 连接失败 / 上游不可用（SRS 9.5：连接异常、5xx）。 */
+    LLM_UNAVAILABLE,
     /** L2：LLM 输出格式非法。 */
     LLM_INVALID_OUTPUT,
     /** L2：意图置信度不足（追问澄清）。 */

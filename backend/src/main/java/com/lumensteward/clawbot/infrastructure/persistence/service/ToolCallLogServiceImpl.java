@@ -35,11 +35,12 @@ public class ToolCallLogServiceImpl implements ToolCallLogService {
     }
 
     @Override
-    public ToolCallRecord logStart(String traceId, String openid, Long sessionId, ToolCall call, int round) {
+    public ToolCallRecord logStart(String traceId, String openid, Long sessionId, ToolCall call,
+                                   int round, int callSeq) {
         String toolName = call == null ? null : call.functionName();
         JsonNode params = call == null ? null : JsonUtils.readTree(call.argumentsJson());
         ToolCallRecord record = new ToolCallRecord(null, traceId, openid, sessionId, toolName,
-                0, round, ToolStatus.NOT_EXECUTED, null, null, params, null, 0L);
+                callSeq, round, ToolStatus.NOT_EXECUTED, null, null, params, null, 0L);
         if (call == null) {
             return record;
         }
@@ -49,14 +50,14 @@ public class ToolCallLogServiceImpl implements ToolCallLogService {
             entity.setOpenid(openid);
             entity.setSessionId(sessionId);
             entity.setToolName(toolName);
-            entity.setCallSeq(0);
+            entity.setCallSeq(callSeq);
             entity.setParamsJson(truncate(params == null ? null : params.toString()));
             entity.setStatus(ToolStatus.NOT_EXECUTED.getCode());
             entity.setLatencyMs(0);
             entity.setLlmRound(round);
             toolCallLogMapper.insert(entity);
             return new ToolCallRecord(entity.getId(), traceId, openid, sessionId, toolName,
-                    0, round, ToolStatus.NOT_EXECUTED, null, null, params, null, 0L);
+                    callSeq, round, ToolStatus.NOT_EXECUTED, null, null, params, null, 0L);
         } catch (RuntimeException e) {
             log.warn("工具日志起始写失败（只读降级）: err={}", e.getMessage());
             return record;

@@ -22,6 +22,7 @@ public class DefaultFallbackService implements FallbackService {
             case MSG_DUPLICATED -> "success";
             case UNKNOWN_MSG_TYPE -> "这种消息我暂时还认不出来，可以发文字告诉我吗？";
             case LLM_TIMEOUT -> "我暂时无法回应，请稍后再试。";
+            case LLM_UNAVAILABLE -> "我这会儿有点联系不上，请稍后再试。";
             case LLM_INVALID_OUTPUT -> "我这边有点卡住啦，方便换个说法再试试吗？";
             case LOW_CONFIDENCE_CLARIFY -> "我没太听明白，可以再具体说说吗？";
             case TOOL_NOT_FOUND -> "我暂时还没有这个能力哦。";

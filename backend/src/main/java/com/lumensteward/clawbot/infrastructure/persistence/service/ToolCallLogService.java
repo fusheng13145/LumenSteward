@@ -20,9 +20,10 @@ public interface ToolCallLogService {
      * @param sessionId 会话
      * @param call      模型发起的工具调用
      * @param round     轮次
+     * @param callSeq   本次链路调用序号（从 1 递增，AC-B6/B7）
      * @return 工具调用记录（含主键）
      */
-    ToolCallRecord logStart(String traceId, String openid, Long sessionId, ToolCall call, int round);
+    ToolCallRecord logStart(String traceId, String openid, Long sessionId, ToolCall call, int round, int callSeq);
 
     /**
      * 记录调用结束（按主键回填状态/结果/耗时）。
