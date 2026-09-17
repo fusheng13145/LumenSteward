@@ -1,0 +1,53 @@
+# ===== 本地工具数据（不参与版本控制）=====
+.workbuddy/
+
+# ===== IDE / 编辑器 =====
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.settings/
+.project
+.classpath
+
+# ===== Java / Maven =====
+target/
+build/
+out/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# ===== Node / 前端 =====
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== 环境变量（配置契约 .env.example 须提交）=====
+.env
+.env.local
+.env.*.local
+
+# ===== 日志与运行时产物 =====
+logs/
+*.log
+hs_err_pid*
+replay_pid*
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 测试与覆盖率产物 =====
+coverage/
+.nyc_output/
