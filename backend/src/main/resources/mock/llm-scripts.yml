@@ -1,0 +1,58 @@
+# ============================================================================
+# Mock LLM 可编程脚本（T03 / AC-D1 / 供 T04 TC-H 反幻觉专项使用）
+# 由 MockLlmClient 加载；按「轮次 + 最近一条 user 消息子串」确定性返回，
+# 可注入 tool_calls / 终态文本 / 失败（TIMEOUT|UNAVAILABLE|PROTOCOL）。
+# 说明：round 以「消息序列中带 toolCalls 的 assistant 消息数量」推定。
+# ============================================================================
+defaultContent: "（Mock）我在呢，随时听你说～"
+defaultFinishReason: stop
+
+rules:
+  # ---- 宠物档案：本轮发起工具调用（第 0 轮） ----
+  - name: pet-create-toolcall
+    round: 0
+    match: "叫"
+    finishReason: tool_calls
+    toolCalls:
+      - id: mock-call-1
+        type: function
+        name: manage_pet_profile
+        arguments: '{"action":"CREATE","pet_name":"咪咪","pet_type":"猫"}'
+
+  # ---- 宠物档案：工具结果回来后给出终态回复（第 1 轮） ----
+  - name: pet-after-tool
+    round: 1
+    finishReason: stop
+    content: "好嘞，咪咪的档案我已经记下啦。"
+
+  # ---- 反幻觉用例：声称已查快递但未调用任何工具（应被一致性校验拦截） ----
+  - name: hallucination-express-claim
+    round: 0
+    match: "快递"
+    finishReason: stop
+    content: "已为你查询到物流：您的包裹预计明天送达。"
+
+  # ---- 反幻觉用例：数值无法回溯（工具成功但回复数值与结果不符，由测试脚本另行构造） ----
+  - name: hallucination-numeric
+    round: 0
+    match: "轨迹"
+    finishReason: stop
+    content: "物流显示包裹已于 2099-01-01 签收。"
+
+  # ---- 注入故障：超时（40001） ----
+  - name: inject-timeout
+    round: 0
+    match: "触发超时"
+    failure: TIMEOUT
+
+  # ---- 注入故障：服务不可用（40005） ----
+  - name: inject-unavailable
+    round: 0
+    match: "服务不可用"
+    failure: UNAVAILABLE
+
+  # ---- 注入故障：输出协议非法（70055） ----
+  - name: inject-invalid-output
+    round: 0
+    match: "非法输出"
+    failure: PROTOCOL
