@@ -202,12 +202,15 @@
                 </configuration>
             </plugin>
 
-            <!-- 单测运行：强制 UTF-8，避免中文断言在 GBK 控制台下乱码 -->
+            <!-- 单测运行：强制 UTF-8，避免中文断言在 GBK 控制台下乱码；
+                 排除 @Tag("integration") 用例（依赖 Testcontainers/真实 MySQL，本地无 Docker 时
+                 不静默通过，而是显式排除；CI 中由单独步骤以 -Dgroups=integration 运行） -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>-Dfile.encoding=UTF-8</argLine>
+                    <excludedGroups>integration</excludedGroups>
                 </configuration>
             </plugin>
 
