@@ -58,4 +58,20 @@ public interface PetProfileService {
      * @param petName 昵称
      */
     void softDelete(String openid, String petName);
+
+    /**
+     * 按档案主键增量更新（后台管理侧，T05）。
+     *
+     * @param id    档案主键
+     * @param patch 补丁
+     * @return 更新后视图
+     */
+    PetProfileView updateById(Long id, PetProfilePatch patch);
+
+    /**
+     * 按档案主键软删除（后台管理侧，T05）。
+     *
+     * @param id 档案主键
+     */
+    void softDeleteById(Long id);
 }

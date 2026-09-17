@@ -51,6 +51,7 @@ public enum ErrorCode {
     PET_BIRTHDAY_INVALID(30002, 400, "生日日期非法"),
     PET_NOT_FOUND(30003, 404, "宠物档案不存在"),
     PET_FIELD_INVALID(30004, 400, "宠物档案字段值域非法"),
+    RESOURCE_NOT_FOUND(30005, 404, "资源不存在"),
 
     // ===== 40xxx：外部依赖 =====
     LLM_TIMEOUT(40001, 503, "模型服务响应超时"),

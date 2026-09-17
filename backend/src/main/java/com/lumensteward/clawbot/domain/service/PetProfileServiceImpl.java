@@ -176,6 +176,20 @@ public class PetProfileServiceImpl implements PetProfileService {
         }
     }
 
+    @Override
+    public PetProfileView updateById(Long id, PetProfilePatch patch) {
+        PetProfileEntity entity = repository.findLiveById(id)
+                .orElseThrow(() -> BizException.of(ErrorCode.PET_NOT_FOUND));
+        return update(entity.getOpenid(), entity.getPetName(), patch);
+    }
+
+    @Override
+    public void softDeleteById(Long id) {
+        PetProfileEntity entity = repository.findLiveById(id)
+                .orElseThrow(() -> BizException.of(ErrorCode.PET_NOT_FOUND));
+        softDelete(entity.getOpenid(), entity.getPetName());
+    }
+
     private void requireOpenid(String openid) {
         if (openid == null || openid.isBlank()) {
             throw BizException.of(ErrorCode.PARAM_MISSING, "用户标识缺失");

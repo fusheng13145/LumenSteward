@@ -1,5 +1,8 @@
 package com.lumensteward.clawbot.infrastructure.config;
 
+import com.lumensteward.clawbot.infrastructure.security.JwtAuthenticationFilter;
+import com.lumensteward.clawbot.infrastructure.security.RestAccessDeniedHandler;
+import com.lumensteward.clawbot.infrastructure.security.RestAuthenticationEntryPoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -11,39 +14,57 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * 后台安全配置（G-16 Bean 声明收敛）。
+ * 后台安全配置（G-16 Bean 声明收敛；架构 4.3 / 5.4）。
  *
  * <p>职责：
  * <ul>
  *   <li>无状态（JWT）过滤器链；关闭表单登录与 HTTP Basic；</li>
- *   <li>公开端点：微信回调、登录、actuator 探测、API 文档；其余一律要求认证；</li>
+ *   <li>公开端点：微信回调、登录、actuator 探测、API 文档；<b>其余一律要求认证</b>（AC-E2）；</li>
+ *   <li>未认证 → {@link RestAuthenticationEntryPoint}（HTTP 401）；越权 → {@link RestAccessDeniedHandler}（HTTP 403）；</li>
  *   <li>暴露 {@link PasswordEncoder}（BCrypt，供初始管理员口令注入与登录校验复用）。</li>
  * </ul>
  *
- * <p><b>MVP 边界（G-33 如实标注）：</b>JWT 解析过滤器（{@code JwtAuthenticationFilter}）与
- * 登录/越权处理在 T03/T05 接入；接入前 {@code /api/doctor} 暂列为 permitAll，接入后应移入认证区。
- * CORS 复用 {@code WebMvcConfig} 的 MVC 配置（Spring Security 通过 HandlerMappingIntrospector 自动读取）。
+ * <p>CORS 复用 {@code WebMvcConfig} 的 MVC 配置（Spring Security 通过 HandlerMappingIntrospector 自动读取）。
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    /** 无需认证即可访问的端点（MVP 骨架，T03/T05 将收紧 {code /api/doctor}）。 */
+    /** 无需认证即可访问的端点（T05 已收紧 {@code /api/doctor} 至认证区）。 */
     private static final String[] PUBLIC_ENDPOINTS = {
             "/actuator/health/**",
             "/actuator/info",
             "/actuator/prometheus",
             "/api/wx/callback/**",
             "/api/auth/login",
-            "/api/doctor",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/error"
     };
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
+    private final RestAccessDeniedHandler accessDeniedHandler;
+
+    /**
+     * 构造器注入（G-14）。
+     *
+     * @param jwtAuthenticationFilter JWT 认证过滤器
+     * @param authenticationEntryPoint 未认证入口点（401）
+     * @param accessDeniedHandler     越权处理器（403）
+     */
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          RestAuthenticationEntryPoint authenticationEntryPoint,
+                          RestAccessDeniedHandler accessDeniedHandler) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.authenticationEntryPoint = authenticationEntryPoint;
+        this.accessDeniedHandler = accessDeniedHandler;
+    }
 
     /**
      * 无状态安全过滤器链。
@@ -63,9 +84,16 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated())
+                // 401 / 403 统一走统一响应体（G-08），避免容器默认页或裸 403
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler))
                 // 纯 API 服务，禁用表单登录与 Basic，避免产生无关的默认行为
                 .formLogin(AbstractHttpConfigurer::disable)
-                .httpBasic(AbstractHttpConfigurer::disable);
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .logout(AbstractHttpConfigurer::disable)
+                // JWT 过滤器置于用户名口令过滤器之前（无状态，无 session）
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

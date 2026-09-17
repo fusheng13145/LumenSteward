@@ -39,6 +39,14 @@ public interface PetProfileRepository {
     Optional<PetProfileEntity> findLiveByName(String openid, String petName);
 
     /**
+     * 按主键查存活档案（后台管理侧按档案 id 定位，T05）。
+     *
+     * @param id 主键
+     * @return 实体（不存在或已软删为空）
+     */
+    Optional<PetProfileEntity> findLiveById(Long id);
+
+    /**
      * 按主键更新（仅非空字段，依 MyBatis-Plus updateById 语义）。
      *
      * @param entity 实体（须含 id）

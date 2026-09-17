@@ -50,6 +50,15 @@ public class PetProfileRepositoryImpl implements PetProfileRepository {
     }
 
     @Override
+    public Optional<PetProfileEntity> findLiveById(Long id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        // 依实体 @TableLogic：自动附加 deleted_at IS NULL（存活过滤）
+        return Optional.ofNullable(petProfileMapper.selectById(id));
+    }
+
+    @Override
     public int updateById(PetProfileEntity entity) {
         return petProfileMapper.updateById(entity);
     }
