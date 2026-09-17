@@ -1,0 +1,31 @@
+# ============================================================================
+# prod profile：生产
+#  - 全量依赖真实服务（Redis/MySQL/微信/LLM）
+#  - 占位符或缺失配置即启动失败（Fail-Fast，AC-F3 / SUP-06）
+#  - 不开放 API 文档；健康检查不暴露明细
+# ============================================================================
+spring:
+  flyway:
+    enabled: true
+    clean-disabled: true
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+clawbot:
+  startup:
+    # prod：占位符缺失一律 Fail-Fast
+    placeholder-fail-fast: true
+
+logging:
+  level:
+    root: INFO
+    com.lumensteward.clawbot: INFO

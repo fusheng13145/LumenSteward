@@ -1,0 +1,33 @@
+# ============================================================================
+# local profile：本地开发
+#  - Mock 通道全开（wx.mock.enabled / llm.provider=mock）
+#  - 占位符缺失仅输出显著 WARN，不阻断启动（AC-F3 / SUP-06）
+# ============================================================================
+spring:
+  datasource:
+    # 本地默认口令，可按需通过环境变量覆盖（禁止把真实口令写入仓库）
+    password: ${DB_PASSWORD:1234}
+
+logging:
+  level:
+    root: INFO
+    com.lumensteward.clawbot: DEBUG
+    # 打印 MyBatis-Plus 参数化 SQL（占位符形式）便于联调；生产禁用
+    com.lumensteward.clawbot.infrastructure.persistence: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  # 仅非生产环境开放 API 文档（NFR-SE-06）
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+clawbot:
+  startup:
+    # local：占位符仅告警
+    placeholder-fail-fast: false

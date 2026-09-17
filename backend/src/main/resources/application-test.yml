@@ -1,0 +1,25 @@
+# ============================================================================
+# test profile：集成测试
+#  - 集成测试基座使用 Testcontainers 提供的 MySQL 8 / Redis 7（NFR-MA-04）
+#  - 单测不启用本 profile；本文件供 @SpringBootTest 的集成用例使用
+# ============================================================================
+spring:
+  flyway:
+    enabled: true
+    clean-disabled: false
+
+logging:
+  level:
+    root: WARN
+    com.lumensteward.clawbot: INFO
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+clawbot:
+  startup:
+    placeholder-fail-fast: false
+  cors:
+    allowed-origins: http://localhost:5173
