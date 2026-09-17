@@ -4,31 +4,37 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lumensteward.clawbot.common.api.PageQuery;
 import com.lumensteward.clawbot.common.api.PageResult;
+import com.lumensteward.clawbot.infrastructure.observability.PersistenceWriteFailureReporter;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxMessageEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.WxMessageMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
 /**
  * {@link WxMessageRepository} 的 MyBatis-Plus 实现。
  *
- * <p>写失败降级：记录 WARN 后返回，不抛出（SRS 9.5 DB 不可用 → 只读降级）。
+ * <p>写失败降级：不抛出、不阻断（SRS 9.5 DB 不可用 → 只读降级），但<b>不再静默</b>：经
+ * {@link PersistenceWriteFailureReporter} 以 ERROR 级日志（含表名/列名/完整异常）并计入指标
+ * {@code persistence.write.failures}（D7 修复）。
  */
 @Repository
 public class WxMessageRepositoryImpl implements WxMessageRepository {
 
-    private static final Logger log = LoggerFactory.getLogger(WxMessageRepositoryImpl.class);
+    /** 本仓库写入的目标表名（用于失败上报）。 */
+    private static final String TABLE = "wx_message";
 
     private final WxMessageMapper wxMessageMapper;
+    private final PersistenceWriteFailureReporter writeFailureReporter;
 
     /**
      * 构造器注入（G-14）。
      *
-     * @param wxMessageMapper 消息 Mapper
+     * @param wxMessageMapper       消息 Mapper
+     * @param writeFailureReporter  写入失败上报器（日志 + 指标）
      */
-    public WxMessageRepositoryImpl(WxMessageMapper wxMessageMapper) {
+    public WxMessageRepositoryImpl(WxMessageMapper wxMessageMapper,
+                                   PersistenceWriteFailureReporter writeFailureReporter) {
         this.wxMessageMapper = wxMessageMapper;
+        this.writeFailureReporter = writeFailureReporter;
     }
 
     @Override
@@ -36,7 +42,7 @@ public class WxMessageRepositoryImpl implements WxMessageRepository {
         try {
             wxMessageMapper.insert(entity);
         } catch (RuntimeException e) {
-            log.warn("消息落库失败（只读降级）: err={}", e.getMessage());
+            writeFailureReporter.report(TABLE, e);
         }
     }
 

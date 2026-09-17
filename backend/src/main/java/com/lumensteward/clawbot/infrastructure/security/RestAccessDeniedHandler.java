@@ -91,7 +91,8 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
             auditLogService.record(adminId, REG_TYPE_AUTH, ACTION_ACCESS_DENIED, target,
                     null, null, "越权访问被拒绝", clientIp(request), 0);
         } catch (RuntimeException e) {
-            log.warn("越权审计写入失败（不影响 403 响应）: err={}", e.getMessage());
+            // D7：不再静默——ERROR 级并显式标注表名，确保越权审计失败可被观测（403 响应不受影响）。
+            log.error("越权审计写入失败（不影响 403 响应）：table=log_audit cause={}", e.getMessage(), e);
         }
     }
 

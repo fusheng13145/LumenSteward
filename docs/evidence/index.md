@@ -159,3 +159,90 @@ Caused by: ... Error creating bean with name 'flywayInitializer' ... Unable to o
 - `log_audit` 越权审计的真实落库——**【未取得证据】**（需 DB 凭据）。
 - 真实微信 / LLM / 物流 / 地图外呼——**【未取得证据】**（默认 Mock 通道）。
 
+---
+
+## 批次 D7 缺陷修复（审计表列宽不足 + 静默失效）与真实 MySQL 实证
+
+> **D7【阻断】** `log_tool_call.trace_id VARCHAR(32)` 容纳不下 36 位 UUID → INSERT 恒报
+> `Data too long for column 'trace_id'`，且该异常被 best-effort 逻辑**静默吞掉** → 运行期
+> `log_tool_call` **恒为空表**：D3 的 `call_seq` 写不进、AC-B6/B7、AC-E6 全失败、ADR-003 同步落库实际失效。
+
+### D7 修复点
+
+| # | 修复 | 文件 | 说明 |
+| --- | --- | --- | --- |
+| ① | 列宽增量迁移 | `db/migration/V1.0.5__fix_long_identifier_columns.sql` | `ALTER TABLE log_tool_call MODIFY COLUMN trace_id VARCHAR(64) NOT NULL`；**不改已发布 V1.0.2**（SRS 7.6.3 / G-07） |
+| ② | 消除静默吞异常 | `infrastructure/observability/PersistenceWriteFailureReporter`（新增）+ `ToolCallLogServiceImpl` / `AuditLogServiceImpl` / `WxMessageRepositoryImpl` / `RestAccessDeniedHandler` | 写入失败一律 ERROR 级（含 **表名 / 列名 / 完整异常**）并计入 Micrometer 指标 `persistence.write.failures{table,column}`（随 `/actuator/prometheus` 暴露）；主链路仍不阻断，但**失败必可见** |
+| ③ | trace_id NOT NULL 兜底（补强） | `application/orchestrator/AgentOrchestratorImpl#resolveTraceId`（新增） | 请求/ MDC 均无 traceId 时生成一次性 UUID，杜绝 `log_tool_call` 再次因 NOT NULL 而恒空 |
+| ④ | D5 闭环（越权审计） | `common/exception/GlobalExceptionHandler#handleAccessDenied` | `@PreAuthorize` 拒绝由 `@RestControllerAdvice` 处理（**不经** `RestAccessDeniedHandler`），故在此同步写 `log_audit`（`AUTH/ACCESS_DENIED/result=0`）；此前该路径只有 403、无审计 |
+| ⑤ | 集成可跑入口 | `pom.xml`（`${excluded.groups}`，默认 `integration`）、`support/TestcontainersConfig`（新增 Redis 7 容器 + 统一 `@DynamicPropertySource`） | 默认行为不变；集成实跑：`mvn test -Dexcluded.groups=none -Dgroups=integration` |
+
+### D7 列宽核查表（8 表逐列核查「长标识 / 富文本」类列）
+
+> 依据 = 该列在本系统中的**实际最坏长度**（WeChat 规范 / 本项目生成规则 / 已用 TEXT·JSON 承载）。
+
+| 表名 | 列名 | 原宽度 | 新宽度 | 依据（实际最坏长度） |
+| --- | --- | --- | --- | --- |
+| log_tool_call | **trace_id** | **VARCHAR(32)** | **VARCHAR(64)** | ❌ **缺陷**：`UUID.randomUUID().toString()` 固定 **36 位** > 32；加宽至 64（36 位 + 预留） |
+| log_tool_call | openid | VARCHAR(64) | 不变 | WeChat openid ≤ 28 位，余量充足 |
+| log_tool_call | tool_name | VARCHAR(64) | 不变 | 工具名枚举，最长 < 20 |
+| log_tool_call | params_json / result_json | JSON | 不变 | JSON 类型无字符宽度限制（结果应用层截断 2000） |
+| log_tool_call | error_type | VARCHAR(32) | 不变 | 枚举 L1/L2/L3/L4 |
+| log_tool_call | fallback_reason | VARCHAR(255) | 不变 | 枚举常量（TOOL_FAILED / TOOL_DEGRADED / TOOL_TIMEOUT / NOT_EXECUTED） |
+| log_audit | target | VARCHAR(128) | 不变 | 本系统取值 = 请求 URI / 配置键；最长 `/api/configs`+键 ≤ 82 |
+| log_audit | reg_type / action / reason / ip | VARCHAR(32/64/255/45) | 不变 | 枚举 / 原因 / IPv6；before_value·after_value 为 TEXT |
+| wx_user | openid / unionid / nickname / avatar_url | VARCHAR(64/64/64/512) | 不变 | openid·unionid ≤ 28；头像 URL（微信通常 ≤ 200）< 512 |
+| wx_session | context_key | VARCHAR(128) | 不变 | 恒 `conv:{openid}` ≤ 5+28 = 33 < 128 |
+| wx_message | msg_id / media_id / tool_name | VARCHAR(64/128/64) | 不变 | 微信 MsgId 为数字串；素材 ID / 工具名均 < 128 |
+| wx_message | content | TEXT | 不变 | 富文本（个人信息载体），TEXT(65535) |
+| sys_admin_user | username / password_hash / role / last_login_ip | VARCHAR(64/128/32/45) | 不变 | BCrypt 哈希 60 位（余量）；角色枚举；IPv6 |
+| sys_config | config_key / value_type / category / description | VARCHAR(64/16/32/255) | 不变 | 命名键 / 枚举 / 说明；config_value·default_value 为 TEXT |
+| biz_pet_profile | pet_name / breed / personality / notes / photo_media_id | VARCHAR(32/64/255/500/128) | 不变 | 昵称 / 品种 / 文本，均按 SRS 7.2 取值域 |
+
+**结论：8 张表逐列核查后，唯一列宽不足者为 `log_tool_call.trace_id`，故 V1.0.5 仅做此一处 MODIFY。**
+
+### D7 真实 MySQL 实跑证据（Docker / Testcontainers MySQL 8.4）
+
+命令（本机 Docker Desktop；集成用例自包含启动 MySQL 8.4 + Redis 7）：
+```text
+DOCKER_API_VERSION=1.43  mvn -B -f backend/pom.xml test -Dexcluded.groups=none -Dgroups=integration
+→ Tests run: 11, Failures: 0, Errors: 0, Skipped: 0   BUILD SUCCESS
+```
+
+`log_tool_call` 实际落库（`[D7-EVIDENCE]`，取自运行日志）：
+```text
+[D7-EVIDENCE] information_schema log_tool_call.trace_id: data_type=varchar max_length=64 is_nullable=NO
+[D7-EVIDENCE] inserted trace_id=1c1c8d64-b70b-492b-b28e-2eda735e3ad5 (len=36)
+[D7-EVIDENCE] read-back trace_id=1c1c8d64-b70b-492b-b28e-2eda735e3ad5
+[D7-EVIDENCE] log_tool_call.call_seq=[1, 2]
+[D7-EVIDENCE] openid=openid-it-mainchain-001
+[D7-EVIDENCE] wx_message.roles=[user, assistant]
+[D7-EVIDENCE] wx_user.count=1
+[D7-EVIDENCE] log_tool_call.rows=1
+[D7-EVIDENCE] log_tool_call.call_seq=[1]
+[D7-EVIDENCE] log_tool_call.trace_id=4c76692f-78c9-4579-972c-3f0a37e2fd59 (len=36)
+```
+
+D5 越权审计实际落库（`[D5-EVIDENCE]`）：
+```text
+[D5-EVIDENCE] OPERATOR PUT /api/configs -> HTTP 403 code=20003
+[D5-EVIDENCE] log_audit reg_type=AUTH action=ACCESS_DENIED result=0 admin_id=2 target=/api/configs
+```
+> **恢复原状**：实跑用的 MySQL/Redis 容器为 Testcontainers 临时容器，跑毕已 `docker rm -f` 清理，未留常驻容器。
+
+### D7 静默吞异常排查清单
+
+| 检索范围 | 结果 |
+| --- | --- |
+| 全仓 `catch (RuntimeException / Exception / Throwable / DataAccessException …)` | 约 40+ 处；绝大多数为 Redis / LLM / 微信外呼的 best-effort 降级，已 `log.warn` 且带 key/上下文（不静默） |
+| 审计 / 日志类**写入** catch（D7 必改） | 4 处：`ToolCallLogServiceImpl`（logStart / logEnd，table=log_tool_call）、`AuditLogServiceImpl.record`（table=log_audit）、`WxMessageRepositoryImpl.save`（table=wx_message）、`RestAccessDeniedHandler.audit`（table=log_audit，兜底） |
+| 改动前行为 | `log.warn("…只读降级: err={}", e.getMessage())` —— 丢失表名/列名、无指标；`Data too long for column 'trace_id'` 运行期完全不可见 |
+| 改动后行为 | `PersistenceWriteFailureReporter`：**ERROR 级**日志（表名 + 从异常解析的列名 + 完整异常栈）+ 指标 `persistence.write.failures{table,column}`；单测 `observability/PersistenceWriteFailureReporterTest`（4 例）证明「失败必可见且可量化」，集成实跑中该 ERROR 日志确实打印出 `table=log_tool_call` 的失败（见上文根因定位） |
+
+### D7 未实跑 / 未取得证据
+
+- 真实微信 / LLM / 物流 / 地图外呼——默认 Mock 通道，**【未取得证据】**。
+- AC-P1~P6 性能指标（P95 / 并发）——需压测环境，**【未取得证据】**。
+- `scripts/e2e-smoke.ps1` 对**独立启动后端**的走查——本次以 Testcontainers 内嵌上下文等价覆盖（`MainChainE2ETest` / `MainChainRowEvidenceTest` / `AccessDeniedAuditIntegrationTest`），未另起常驻后端。
+- 环境说明：本机 `~/.testcontainers.properties` 原将 Docker 策略固定为 `NpipeSocketClientProviderStrategy`，在当前 Docker Desktop（API 1.56）下解析到错误管道而失败；实跑时改为 `EnvironmentAndSystemPropertyClientProviderStrategy` 并配合 `DOCKER_API_VERSION`，属**本机环境适配**，非仓库改动。
+

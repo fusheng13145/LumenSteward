@@ -37,8 +37,13 @@
         <logstash-encoder.version>7.4</logstash-encoder.version>
         <caffeine.version>3.1.8</caffeine.version>
         <lombok.version>1.18.34</lombok.version>
-        <testcontainers.version>1.20.3</testcontainers.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
         <dependency-check.version>10.0.4</dependency-check.version>
+
+        <!-- 单测默认排除 @Tag("integration")（依赖 Docker/Testcontainers，无 Docker 时不静默通过）。
+             需要实跑集成用例（含 D7 真实 MySQL 实证）时：覆盖本属性并显式指定分组，例如
+             `mvn -B -f backend/pom.xml test -Dexcluded.groups=none -Dgroups=integration`。 -->
+        <excluded.groups>integration</excluded.groups>
     </properties>
 
     <dependencies>
@@ -210,7 +215,8 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>-Dfile.encoding=UTF-8</argLine>
-                    <excludedGroups>integration</excludedGroups>
+                    <!-- 默认排除集成分组；CI 与本地常规构建用默认值，集成实跑见上方 excluded.groups 说明 -->
+                    <excludedGroups>${excluded.groups}</excludedGroups>
                 </configuration>
             </plugin>
 

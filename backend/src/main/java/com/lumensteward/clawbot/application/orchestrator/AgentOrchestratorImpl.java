@@ -128,7 +128,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             return new OrchestrationResult(text, SessionState.IDLE, List.of(),
                     FallbackReason.INVALID_ARGS.name(), 0, 0);
         }
-        String traceId = request.traceId() == null ? TraceContext.getTraceId() : request.traceId();
+        String traceId = resolveTraceId(request);
         String openid = request.openid();
         Long sessionId = request.sessionId();
         int maxRounds = Math.max(1, orchestrationProperties.maxRounds());
@@ -237,6 +237,25 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         log.info("编排完成 openid={} rounds={} llmCalls={} tools={}",
                 MaskUtils.openid(openid), round, llmCalls, executed.size());
         return new OrchestrationResult(reply, SessionState.TASKING, executed, null, llmCalls, round);
+    }
+
+    /**
+     * 解析链路标识（D7 补强）。
+     *
+     * <p>优先取请求携带的 traceId，其次取当前线程 MDC（{@link TraceContext}）。二者均缺失时
+     * <b>生成一次性 traceId</b>——{@code log_tool_call.trace_id} 为 {@code NOT NULL} 列，若无兜底，
+     * 缺 traceId 时 {@code logStart} 会因 NOT NULL 约束失败并（修复前）被静默吞掉，
+     * 再次造成 {@code log_tool_call} 运行期恒空。此兜底确保「工具日志同步落库」（ADR-003）在任何入口下都成立。
+     *
+     * @param request 编排请求
+     * @return 非空 traceId
+     */
+    private static String resolveTraceId(OrchestrationRequest request) {
+        String traceId = request.traceId();
+        if (traceId == null || traceId.isBlank()) {
+            traceId = TraceContext.getTraceId();
+        }
+        return (traceId == null || traceId.isBlank()) ? TraceContext.newTraceId() : traceId;
     }
 
     /**

@@ -2,12 +2,18 @@ package com.lumensteward.clawbot.common.exception;
 
 import com.lumensteward.clawbot.common.api.ApiResponse;
 import com.lumensteward.clawbot.common.error.ErrorCode;
+import com.lumensteward.clawbot.infrastructure.persistence.service.AuditLogService;
+import com.lumensteward.clawbot.infrastructure.security.AuthPrincipal;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -21,10 +27,39 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  *
  * <p>职责：把业务异常与系统异常分类处理，并与 HTTP 状态码<b>显式绑定</b>，禁止以单一 500 概括
  * 全部异常；响应统一走 {@link ApiResponse}（含 traceId）。文案不得包含堆栈/SQL/主机名/密钥（G-13）。
+ *
+ * <p><b>D5 闭环补充：</b>方法级安全（{@code @PreAuthorize}）抛出的
+ * {@code AuthorizationDeniedException}/{@code AccessDeniedException} 由本类的
+ * {@link #handleAccessDenied} 处理（<b>不</b>经由 {@code RestAccessDeniedHandler}），故越权审计
+ * 也须在此写入 {@code log_audit}（{@code reg_type=AUTH}/{@code action=ACCESS_DENIED}/{@code result=0}），
+ * 否则 OPERATOR 调用配置写接口这类最常见的越权将「只有 403、没有审计」。审计为 best-effort，绝不影响 403 响应。
  */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /** 审计资源类型：认证/授权域。 */
+    private static final String REG_TYPE_AUTH = "AUTH";
+
+    /** 审计操作：越权访问被拒绝。 */
+    private static final String ACTION_ACCESS_DENIED = "ACCESS_DENIED";
+
+    private final AuditLogService auditLogService;
+
+    /**
+     * 构造器注入（G-14）。
+     *
+     * @param auditLogService 审计日志服务（越权审计）
+     */
+    @Autowired
+    public GlobalExceptionHandler(AuditLogService auditLogService) {
+        this.auditLogService = auditLogService;
+    }
+
+    /** 独立构造（无审计）：保留以便脱离 Spring 上下文的单元构造；此时仅返回 403、不写审计。 */
+    public GlobalExceptionHandler() {
+        this.auditLogService = null;
+    }
 
     /** 业务异常：使用错误码绑定的 HTTP 状态，业务失败<b>不</b>返回 200。 */
     @ExceptionHandler(BizException.class)
@@ -88,11 +123,64 @@ public class GlobalExceptionHandler {
         return build(ErrorCode.PARAM_INVALID, ErrorCode.PARAM_INVALID.getMessage());
     }
 
-    /** 越权访问：@PreAuthorize 拒绝（FR-15 验收准则②，记越权审计由后续切面完成）。 */
+    /** 越权访问：@PreAuthorize 拒绝（FR-15 验收准则②；D5：同步落越权审计）。 */
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccessDenied(AccessDeniedException ex) {
+    public ResponseEntity<ApiResponse<Object>> handleAccessDenied(AccessDeniedException ex,
+                                                                  HttpServletRequest request) {
         log.warn("越权访问被拒绝: {}", ex.getMessage());
+        auditAccessDenied(request);
         return build(ErrorCode.FORBIDDEN, ErrorCode.FORBIDDEN.getMessage());
+    }
+
+    /**
+     * 写入越权审计（best-effort，绝不抛出；D5 闭环）。
+     *
+     * @param request 被拒绝的请求（用于 target URI 与来源 IP）
+     */
+    private void auditAccessDenied(HttpServletRequest request) {
+        if (auditLogService == null) {
+            return;
+        }
+        try {
+            Long adminId = currentAdminId();
+            String target = request == null ? null : request.getRequestURI();
+            auditLogService.record(adminId, REG_TYPE_AUTH, ACTION_ACCESS_DENIED, target,
+                    null, null, "越权访问被拒绝", clientIp(request), 0);
+        } catch (RuntimeException e) {
+            // D7：不静默——ERROR 级并显式标注表名，确保越权审计失败可被观测（403 响应不受影响）。
+            log.error("越权审计写入失败（不影响 403 响应）：table=log_audit cause={}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 取当前认证主体的管理员主键。
+     *
+     * @return adminId；未认证/非 AuthPrincipal 时返回 null
+     */
+    private static Long currentAdminId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthPrincipal principal) {
+            return principal.adminId();
+        }
+        return null;
+    }
+
+    /**
+     * 取客户端 IP（优先 {@code X-Forwarded-For} 首段）。
+     *
+     * @param request 请求
+     * @return IP；不可用返回 null
+     */
+    private static String clientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            int comma = forwarded.indexOf(',');
+            return (comma > 0 ? forwarded.substring(0, comma) : forwarded).trim();
+        }
+        return request.getRemoteAddr();
     }
 
     /** 认证失败（无 Token / Token 无效）。 */

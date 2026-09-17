@@ -11,8 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 import java.util.List;
 
@@ -22,21 +20,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 主链路「真实落库」端到端集成证据（D1/D3/D4 / AC-A1 / AC-A7 / AC-B6 / AC-E5）。
  *
  * <p><b>前置（故标注 {@code integration}，由 surefire {@code excludedGroups} 排除）：</b>
- * <ul>
- *   <li>Docker：Testcontainers MySQL 8（跑真实 Flyway 迁移 + 真实 MyBatis-Plus 落库）；</li>
- *   <li>Redis：默认 {@code localhost:6379}（可用 {@code REDIS_HOST}/{@code REDIS_PORT} 覆盖）。</li>
- * </ul>
+ * Docker（Testcontainers 自包含启动 MySQL 8 与 Redis 7；数据源 / Redis / Flyway 属性由
+ * {@link TestcontainersConfig} 的 {@code @DynamicPropertySource} 统一注入，<b>不再依赖外部服务</b>）。
  *
- * <p>本环境 MySQL 凭据不可用 / Docker 未运行，故<b>未实跑</b>（见 {@code docs/evidence/index.md} 与
- * {@code docs/QA测试报告.md}）。可执行的组件级等价证据见
- * {@code verification/MainChainWiringVerificationTest}（以内存替身断言 user+assistant 落库与编排器接线）。
+ * <p>可执行的组件级等价证据另见 {@code verification/MainChainWiringVerificationTest}
+ * （以内存替身断言 user+assistant 落库与编排器接线）。
  *
  * <p>用例以真实签名触发回调（content 含"叫"，经 Mock LLM 脚本触发 {@code manage_pet_profile}
  * 真实工具调用），随后断言：
  * <ol>
  *   <li>{@code wx_message}：同一 openid 同时存在 {@code user} 与 {@code assistant} 两行（主链路已产出并落库终态）；</li>
  *   <li>{@code wx_user}：首交互用户被 upsert（AC-E5）；</li>
- *   <li>{@code log_tool_call}：存在工具调用记录且 {@code call_seq} 自 1 起（AC-B6/B7）。</li>
+ *   <li>{@code log_tool_call}：存在工具调用记录且 {@code call_seq} 自 1 起（AC-B6/B7）；</li>
+ *   <li>{@code log_tool_call.trace_id}：落库值完整 36 位（D7 列宽修复的直接实证）。</li>
  * </ol>
  */
 @Tag("integration")
@@ -44,14 +40,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MainChainRowEvidenceTest extends TestcontainersConfig {
 
     private static final long AWAIT_TIMEOUT_MS = 5000L;
-
-    @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.flyway.enabled", () -> true);
-    }
 
     @Autowired
     private WechatCallbackController controller;
@@ -97,6 +85,36 @@ class MainChainRowEvidenceTest extends TestcontainersConfig {
                 "SELECT call_seq FROM log_tool_call WHERE openid = ? ORDER BY call_seq", Integer.class, openid);
         assertThat(seqs).as("应存在工具调用记录（AC-B6/B7）").isNotEmpty();
         assertThat(seqs.get(0)).as("call_seq 应自 1 起（D3 修复）").isEqualTo(1);
+
+        // D7 直接实证：trace_id 落库值必须完整（36 位 UUID），证明确实写入成功而非被列宽截断/静默丢弃
+        String traceId = jdbcTemplate.queryForObject(
+                "SELECT trace_id FROM log_tool_call WHERE openid = ? ORDER BY call_seq LIMIT 1", String.class, openid);
+        assertThat(traceId)
+                .as("D7：trace_id 应为完整 36 位 UUID（VARCHAR(64) 修复后不再 Data too long）")
+                .isNotNull()
+                .hasSize(36)
+                .matches("^[0-9a-fA-F-]{36}$");
+
+        Integer totalRows = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM log_tool_call WHERE openid = ?", Integer.class, openid);
+        assertThat(totalRows).as("D7：log_tool_call 运行期不得恒空").isNotNull().isPositive();
+
+        dumpEvidence(openid, roles, users, seqs, traceId, totalRows);
+    }
+
+    /** 输出 D7 实证所需的具体 DB 行（供构建日志留痕）。 */
+    private void dumpEvidence(String openid, List<String> roles, Integer users, List<Integer> seqs,
+                              String traceId, Integer totalRows) {
+        System.out.println("[D7-EVIDENCE] openid=" + openid);
+        System.out.println("[D7-EVIDENCE] wx_message.roles=" + roles);
+        System.out.println("[D7-EVIDENCE] wx_user.count=" + users);
+        System.out.println("[D7-EVIDENCE] log_tool_call.rows=" + totalRows);
+        System.out.println("[D7-EVIDENCE] log_tool_call.call_seq=" + seqs);
+        System.out.println("[D7-EVIDENCE] log_tool_call.trace_id=" + traceId
+                + " (len=" + (traceId == null ? 0 : traceId.length()) + ")");
+        List<String> traceIds = jdbcTemplate.queryForList(
+                "SELECT trace_id FROM log_tool_call WHERE openid = ? ORDER BY call_seq", String.class, openid);
+        System.out.println("[D7-EVIDENCE] log_tool_call.trace_id(all)=" + traceIds);
     }
 
     private void awaitAssistantRow(String openid) throws InterruptedException {

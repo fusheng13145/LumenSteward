@@ -6,32 +6,39 @@ import com.lumensteward.clawbot.common.enums.ToolStatus;
 import com.lumensteward.clawbot.common.util.JsonUtils;
 import com.lumensteward.clawbot.domain.tool.ToolResult;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ToolCall;
+import com.lumensteward.clawbot.infrastructure.observability.PersistenceWriteFailureReporter;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
  * {@link ToolCallLogService} 的同步实现（ADR-003）。
  *
  * <p>{@code logStart} 插入初始行（状态 NOT_EXECUTED）；{@code logEnd} 按主键回填终态。两处均为
- * <b>同步</b>调用，任一写失败仅记录 WARN、不抛出（DB 不可用 → 只读降级，主链路继续）。
+ * <b>同步</b>调用，任一写失败不抛出（DB 不可用 → 只读降级，主链路继续），但<b>不再静默</b>：
+ * 经 {@link PersistenceWriteFailureReporter} 以 ERROR 级日志（含表名/列名/完整异常）并计入指标
+ * {@code persistence.write.failures}（D7 修复：此前 {@code Data too long for column 'trace_id'}
+ * 因只记 WARN 且丢失列名而完全不可见，导致 {@code log_tool_call} 运行期恒空）。
  */
 @Service
 public class ToolCallLogServiceImpl implements ToolCallLogService {
 
-    private static final Logger log = LoggerFactory.getLogger(ToolCallLogServiceImpl.class);
+    /** 本服务写入的目标表名（用于失败上报）。 */
+    private static final String TABLE = "log_tool_call";
 
     private final ToolCallLogMapper toolCallLogMapper;
+    private final PersistenceWriteFailureReporter writeFailureReporter;
 
     /**
      * 构造器注入（G-14）。
      *
-     * @param toolCallLogMapper 工具日志 Mapper
+     * @param toolCallLogMapper     工具日志 Mapper
+     * @param writeFailureReporter  写入失败上报器（日志 + 指标）
      */
-    public ToolCallLogServiceImpl(ToolCallLogMapper toolCallLogMapper) {
+    public ToolCallLogServiceImpl(ToolCallLogMapper toolCallLogMapper,
+                                  PersistenceWriteFailureReporter writeFailureReporter) {
         this.toolCallLogMapper = toolCallLogMapper;
+        this.writeFailureReporter = writeFailureReporter;
     }
 
     @Override
@@ -59,7 +66,7 @@ public class ToolCallLogServiceImpl implements ToolCallLogService {
             return new ToolCallRecord(entity.getId(), traceId, openid, sessionId, toolName,
                     callSeq, round, ToolStatus.NOT_EXECUTED, null, null, params, null, 0L);
         } catch (RuntimeException e) {
-            log.warn("工具日志起始写失败（只读降级）: err={}", e.getMessage());
+            writeFailureReporter.report(TABLE, e);
             return record;
         }
     }
@@ -80,7 +87,7 @@ public class ToolCallLogServiceImpl implements ToolCallLogService {
             entity.setLatencyMs((int) Math.min(Integer.MAX_VALUE, Math.max(0L, finalRecord.latencyMs())));
             toolCallLogMapper.updateById(entity);
         } catch (RuntimeException e) {
-            log.warn("工具日志结束写失败（只读降级）: err={}", e.getMessage());
+            writeFailureReporter.report(TABLE, e);
         }
     }
 
