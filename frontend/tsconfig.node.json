@@ -1,0 +1,16 @@
+{
+  "//": "供 vite.config.ts 使用的 Node 侧类型配置（与浏览器侧 tsconfig.json 隔离，避免 Node 全局类型污染 src）",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["vite.config.ts"]
+}
