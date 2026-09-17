@@ -18,13 +18,15 @@
 ├── backend/                 # Spring Boot 3 后端（JDK 17 目标字节码）
 │   ├── src/main/java/com/lumensteward/clawbot/
 │   │   ├── common/          # 统一响应 / 错误码 / 异常 / 枚举 / 工具
-│   │   ├── infrastructure/  # 配置类 / 可观测性（traceId）/ 持久化 / 缓存 / 客户端
-│   │   ├── interfaces/      # Controller / DTO / Assembler（后续批次）
-│   │   ├── application/     # 用例编排（后续批次）
-│   │   └── domain/          # 领域规则与端口（后续批次）
-│   └── src/main/resources/  # application*.yml / logback-spring.xml / db/migration
+│   │   ├── infrastructure/  # 配置类 / 可观测性（traceId）/ 持久化 / 缓存 / 客户端 / 安全
+│   │   ├── interfaces/      # Controller（微信回调 + 后台）/ DTO / Assembler（脱敏）
+│   │   ├── application/     # 用例编排（对话引擎 / 调度 / 认证 / 后台查询 / 兜底）
+│   │   └── domain/          # 领域规则与端口（工具 / 档案服务 / 上下文 / 意图）
+│   └── src/main/resources/  # application*.yml / logback-spring.xml / db/migration / mock
 ├── frontend/                # Vue 3 + TS + Vite 管理后台
-│   └── src/                 # router / config / stores / utils / services / layouts / views
+│   └── src/                 # router / config / stores / utils / services / directives / layouts / views
+├── scripts/                 # e2e-smoke.ps1 端到端走查脚本
+├── docs/                    # PRD / 架构设计 / 验收证据索引（evidence/index.md）
 ├── .github/workflows/ci.yml # CI 门禁（构建 / 单测 / 类型检查 / 依赖扫描）
 ├── docker-compose.yml       # MySQL 8 + Redis 7 + 后端 + 前端
 └── .env.example             # 后端环境变量契约（真实 .env 不入库）
@@ -82,28 +84,46 @@
 
 ## 3 本地运行
 
-### 3.1 依赖服务
+### 3.1 依赖服务（前置）
+
+- **MySQL 8**（3306）与 **Redis 7**（6379，无密码）必须先就绪；数据库 `clawbot` 由 Flyway 迁移自动建表。
+- 数据库口令经 `DB_PASSWORD` 注入；`local` profile 缺省回落到 `1234`（仅本地）。
+  ⚠️ **生成列唯一约束 `uk_openid_pet_name_live_marker` 依赖真实 MySQL**，请勿改用 H2。
 
 ```bash
-# 方式一：仅起中间件
+# 方式一：仅起中间件（推荐，容器口令默认与 local 一致为 1234）
 docker compose up -d mysql redis
 # 方式二：整体编排（含前后端镜像）
 docker compose up -d --build
 ```
 
-### 3.2 后端
+### 3.2 环境变量（`.env.example` 为契约，见第 4 节）
+
+| 变量 | 说明 | local 缺省 |
+| --- | --- | --- |
+| `SPRING_PROFILES_ACTIVE` | 激活 profile | `local` |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` | MySQL 连接 | `localhost` / `3306` / `clawbot` |
+| `DB_USERNAME` / `DB_PASSWORD` | MySQL 凭据（**生产必改**） | `root` / `1234` |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis 连接 | `localhost` / `6379` / 空 |
+| `WX_TOKEN` | 微信平台校验令牌（验签用，Mock 亦真实执行） | 占位（local 仅 WARN） |
+| `WX_MOCK_ENABLED` | 微信通道 Mock 开关 | `true` |
+| `LLM_PROVIDER` | LLM 通道 `mock` / `real` | `mock` |
+| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | LLM 网关（`real` 时必填） | 空 |
+| `ADMIN_INIT_PASSWORD` | 初始 `SUPER_ADMIN` 口令（首次启动写入） | 空 |
+
+### 3.3 后端
 
 ```bash
 cd backend
 # 本地开发（Mock 全开；占位符仅告警）——默认激活 local profile
 ./mvnw spring-boot:run        # 或使用本机 Maven：mvn spring-boot:run
-# 编译与单测
+# 编译与单测（含集成测试需 Docker：-Dgroups=integration）
 mvn -B clean verify
 ```
 
-数据库连接与密钥经环境变量注入，见根目录 `.env.example`；默认 profile 为 `local`。
+> 启动后：`/actuator/health` 健康检查；`/swagger-ui.html` 接口文档（仅非生产开放）。
 
-### 3.3 前端
+### 3.4 前端
 
 ```bash
 cd frontend
@@ -112,6 +132,16 @@ npm run dev          # 开发服务器 http://localhost:5173（/api 代理到 80
 npm run type-check   # vue-tsc --noEmit（CI 门禁）
 npm run build        # 生产构建 → dist/
 ```
+
+### 3.5 端到端走查（一条命令）
+
+后端以 `local` + Mock 启动后：
+
+```powershell
+pwsh -File scripts/e2e-smoke.ps1 -WxToken clawbot-local-token -AdminPassword <ADMIN_INIT_PASSWORD>
+```
+
+覆盖 AC-A1/A2/A3/A4、AC-C1、AC-E1~E3；脚本**自带微信签名生成器**，无需外部工具。
 
 ---
 
@@ -140,9 +170,18 @@ npm run build        # 生产构建 → dist/
 
 ## 6 本期实现范围说明
 
-- 已完成（迭代 1 / T01）：后端工程骨架、统一契约层（`ApiResponse` / `ErrorCode` / `PageResult`）、
-  全局异常处理、`traceId` 横切、MyBatis-Plus 分页与审计填充配置、Redis/HTTP/OpenAPI 配置、
-  前端工程骨架与 axios 三段式封装、CI、容器编排。
-- 后续批次：T02 数据层（DDL + Flyway + 实体）、T03 接入层与 SPI/Mock、T04 对话引擎、
-  T05 管理后台与前端业务页面。
-- 未启用技术栈（ECharts、ShedLock、AMQP、WebFlux、H2）见第 2 节，均为**预留未启用**。
+按架构文档 §7 任务分解推进，MVP 全量任务（T01~T05）已完成编码：
+
+- **T01 工程骨架与门禁**：统一契约层（`ApiResponse` / `ErrorCode` / `PageResult`）、全局异常、
+  `traceId` 横切、MyBatis-Plus 分页与审计填充、Redis/HTTP/OpenAPI 配置、前端骨架与 axios 三段式、CI、容器编排。
+- **T02 数据层**：DDL + Flyway 增量迁移（含 `uk_openid_pet_name_live_marker` 生成列）、实体/Mapper、启动自检。
+- **T03 接入层与 SPI/Mock**：微信单一回调（验签 + ±300s 窗口 + MsgId 幂等 + XXE 安全解析）、类型路由、
+  SPI 契约与**可编程 Mock**（LLM/物流/地图/TTS）、`ToolRegistry` 启动 Schema 校验 Fail-Fast。
+- **T04 对话引擎与输出治理**：Agent Loop（SC-01~SC-05 硬约束 + 强制收敛）、上下文裁剪（保持 tool/assistant 配对）、
+  执行一致性校验（防幻觉，整条 DETECTED）、内容安全本地词库 **Fail-Closed**、兜底矩阵、真实工具 `manage_pet_profile`。
+- **T05 管理后台与前端**：JWT + RBAC 三角色（401/403 严格）、登录失败锁定、登出黑名单、看板/工具日志/只读页、
+  统一脱敏 `MaskingAssembler`、前端路由守卫/权限指令/Pinia、端到端走查脚本、验收证据索引。
+
+**未启用技术栈**（ECharts、ShedLock、AMQP、WebFlux、H2）见第 2 节，均为**预留未启用**。
+
+**验收证据**：见 `docs/evidence/index.md`（按 G-31 逐条列出证据类型与获取方式，未取得证据项如实标注）。
