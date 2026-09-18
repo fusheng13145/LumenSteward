@@ -358,7 +358,8 @@
                 </executions>
             </plugin>
 
-            <!-- Checkstyle：迭代 2 新增包，报告级接入（failOnViolation 暂 false，S 波收紧） -->
+            <!-- Checkstyle：迭代 2 新增包，失败阻断（failOnViolation=true，对齐 NFR-MA-09 / T1 目标；
+                 实测新包 0 违例，收紧不破坏绿构建） -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
@@ -373,7 +374,7 @@
                 <configuration>
                     <configLocation>checkstyle.xml</configLocation>
                     <includeTestSourceDirectory>false</includeTestSourceDirectory>
-                    <failOnViolation>false</failOnViolation>
+                    <failOnViolation>true</failOnViolation>
                     <consoleOutput>true</consoleOutput>
                     <includes>**/domain/port/**/*.java,**/domain/tool/impl/RecognizeImageTool.java,**/domain/tool/impl/QueryExpressTool.java,**/domain/tool/impl/PlanRouteTool.java,**/domain/tool/impl/SynthesizeVoiceTool.java,**/infrastructure/media/MediaTranscodeService.java,**/infrastructure/client/LlmVisionAdapter.java,**/infrastructure/client/WechatMediaDispatchAdapter.java,**/application/safety/ActionClaimExtractor.java</includes>
                 </configuration>
@@ -388,23 +389,24 @@
                 </executions>
             </plugin>
 
-            <!-- SpotBugs：迭代 2 新增包，报告级接入（仅 report 目标，不绑定 check，避免阻断 M 波） -->
+            <!-- SpotBugs：迭代 2 新增包，失败阻断（绑定 check 目标 + failOnError=true，对齐 NFR-MA-09 / T1；
+                 实测新包 0 bug（threshold=High），收紧不破坏绿构建） -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
                 <version>${spotbugs-plugin.version}</version>
                 <configuration>
                     <onlyAnalyze>com.lumensteward.clawbot.domain.port.*,com.lumensteward.clawbot.domain.tool.impl.RecognizeImageTool,com.lumensteward.clawbot.domain.tool.impl.QueryExpressTool,com.lumensteward.clawbot.domain.tool.impl.PlanRouteTool,com.lumensteward.clawbot.domain.tool.impl.SynthesizeVoiceTool,com.lumensteward.clawbot.infrastructure.media.MediaTranscodeService,com.lumensteward.clawbot.infrastructure.client.LlmVisionAdapter,com.lumensteward.clawbot.infrastructure.client.WechatMediaDispatchAdapter,com.lumensteward.clawbot.application.safety.ActionClaimExtractor</onlyAnalyze>
-                    <failOnError>false</failOnError>
+                    <failOnError>true</failOnError>
                     <threshold>High</threshold>
                     <effort>Max</effort>
                 </configuration>
                 <executions>
                     <execution>
-                        <id>spotbugs-report</id>
+                        <id>spotbugs-check</id>
                         <phase>verify</phase>
                         <goals>
-                            <goal>spotbugs</goal>
+                            <goal>check</goal>
                         </goals>
                     </execution>
                 </executions>
