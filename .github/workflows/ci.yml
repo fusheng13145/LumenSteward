@@ -1,8 +1,11 @@
 name: CI
 
-# 流水线门禁（AC-F2 / NFR-MA-09 / G-28）
+# 流水线门禁（AC-F2 / NFR-MA-04 / NFR-MA-09 / TODO-10 / G-28）
 # 固定工具链版本以保证可复现：Java 17、Node 20、Maven 3.9。
-# 四环节（构建 / 单测 / 类型检查 / 依赖扫描）任一失败即阻断合并。
+# 环节（构建 / 单测 / 类型检查 / 静态检查 / 依赖扫描）任一失败即阻断合并。
+# TODO-10 四要素对照：构建✓ 测试✓（后端 mvn verify + 前端 Vitest）
+#                     静态检查：前端 ESLint✓；后端 Checkstyle/SpotBugs 仍为差距（见 2026-09-18 记录）
+#                     依赖扫描✓（OWASP + npm audit）
 
 on:
   push:
@@ -54,6 +57,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: 安装依赖（严格锁定）
         run: npm ci --no-fund
+      - name: 代码规范检查（ESLint，--max-warnings 0，NFR-MA-09）
+        run: npm run lint
+      - name: 单元测试（Vitest，NFR-MA-04；当前用例数为 0，--passWithNoTests 兜底）
+        run: npm test
       - name: 类型检查（vue-tsc --noEmit，G-28）
         run: npm run type-check
       - name: 生产构建
