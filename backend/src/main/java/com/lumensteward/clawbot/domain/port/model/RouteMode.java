@@ -1,9 +1,9 @@
-package com.lumensteward.clawbot.infrastructure.client.map.model;
+package com.lumensteward.clawbot.domain.port.model;
 
 import java.util.Optional;
 
 /**
- * 出行方式（SRS FR-13 / 附录 B-4，线值 driving/walking/riding/transit）。
+ * 出行方式（领域端口 DTO，上提自 {@code infrastructure/client/map/model}）。
  */
 public enum RouteMode {
 

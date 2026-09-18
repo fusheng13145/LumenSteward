@@ -1,10 +1,10 @@
 package com.lumensteward.clawbot.infrastructure.client.llm;
 
+import com.lumensteward.clawbot.domain.port.model.VisionRequest;
+import com.lumensteward.clawbot.domain.port.model.VisionResult;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ChatMessage;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ChatRequest;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ChatResult;
-import com.lumensteward.clawbot.infrastructure.client.llm.dto.VisionRequest;
-import com.lumensteward.clawbot.infrastructure.client.llm.dto.VisionResult;
 import com.lumensteward.clawbot.infrastructure.client.llm.exception.LlmException;
 import com.lumensteward.clawbot.infrastructure.client.llm.script.MockScript;
 import org.slf4j.Logger;

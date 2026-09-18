@@ -31,7 +31,7 @@ public class ActionClaimExtractor {
 
     /** 完成态动作动词（"已(经)(为你|帮你)?&lt;verb&gt;"）。 */
     private static final Pattern COMPLETION_PATTERN = Pattern.compile(
-            "已(?:经)?(?:为您|帮你|给你|为你)?(查询|查到|查找|获取|规划|保存|记录|记下|更新|修改|删除|删掉|登记|发送|合成|找到|定位|设置|添加|新增)");
+            "已(?:经)?(?:为您|帮你|给你|为你)?(查询|查到|查找|获取|规划|保存|记录|记下|更新|修改|删除|删掉|登记|发送|合成|生成|找到|定位|设置|添加|新增|识别)");
 
     /** 子句切分（句末标点或换行）。 */
     private static final Pattern SENTENCE_SPLITTER = Pattern.compile("[。！？!?\\n\\r]+");
@@ -49,7 +49,8 @@ public class ActionClaimExtractor {
             Map.entry("更新", "更新"), Map.entry("修改", "更新"), Map.entry("设置", "更新"),
             Map.entry("删除", "删除"), Map.entry("删掉", "删除"),
             Map.entry("登记", "登记"), Map.entry("添加", "记录"), Map.entry("新增", "记录"),
-            Map.entry("发送", "发送"), Map.entry("合成", "合成"));
+            Map.entry("发送", "发送"), Map.entry("合成", "合成"), Map.entry("生成", "合成"),
+            Map.entry("识别", "识别"));
 
     /** 全部语义关键词（用于从子句中抽取存在的语义词）。 */
     private static final Set<String> SEMANTIC_KEYWORDS = Set.of(

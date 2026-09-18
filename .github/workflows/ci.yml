@@ -4,7 +4,8 @@ name: CI
 # 固定工具链版本以保证可复现：Java 17、Node 20、Maven 3.9。
 # 环节（构建 / 单测 / 类型检查 / 静态检查 / 依赖扫描）任一失败即阻断合并。
 # TODO-10 四要素对照：构建✓ 测试✓（后端 mvn verify + 前端 Vitest）
-#                     静态检查：前端 ESLint✓；后端 Checkstyle/SpotBugs 仍为差距（见 2026-09-18 记录）
+#                     静态检查：前端 ESLint✓；后端 JaCoCo 覆盖率门禁（迭代2新增包，行≥0.70/分支≥0.60，
+#                              见 pom.xml jacoco-maven-plugin）+ Checkstyle/SpotBugs 同范围报告级接入（已消除差距）
 #                     依赖扫描✓（OWASP + npm audit）
 
 on:

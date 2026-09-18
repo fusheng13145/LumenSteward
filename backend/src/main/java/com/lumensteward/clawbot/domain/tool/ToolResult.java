@@ -48,4 +48,17 @@ public record ToolResult(ToolStatus status, String errorType, String message,
     public boolean isSuccess() {
         return status == ToolStatus.SUCCESS;
     }
+
+    /**
+     * 返回携带可读说明的新结果（不可变 record，原实例不变）。
+     *
+     * <p>用于在成功路径上补充面向模型的 {@code message}（BR-10 要求结果须带可读说明）。
+     * 其余字段原样保留。
+     *
+     * @param message 面向模型的可读说明（须已脱敏）
+     * @return 新的 {@link ToolResult}
+     */
+    public ToolResult withMessage(String message) {
+        return new ToolResult(status, errorType, message, data, retryable, latencyMs);
+    }
 }

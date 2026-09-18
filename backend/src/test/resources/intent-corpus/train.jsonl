@@ -1,0 +1,320 @@
+{"text": "记一下我的宠物咪咪，品种柯基", "intent": "PET_PROFILE", "slots": {"petName": "咪咪"}}
+{"text": "给豆豆建个档案", "intent": "PET_PROFILE", "slots": {"petName": "豆豆"}}
+{"text": "删除旺财的档案", "intent": "PET_PROFILE", "slots": {"petName": "旺财"}}
+{"text": "更新球球的体重到4.5公斤", "intent": "PET_PROFILE", "slots": {"petName": "球球"}}
+{"text": "我的宠物叫什么来着", "intent": "PET_PROFILE", "slots": {"petName": "花花"}}
+{"text": "添加宠物档案，名字可乐", "intent": "PET_PROFILE", "slots": {"petName": "可乐"}}
+{"text": "修改雪球的品种为英短", "intent": "PET_PROFILE", "slots": {"petName": "雪球"}}
+{"text": "登记一只新猫，叫布丁", "intent": "PET_PROFILE", "slots": {"petName": "布丁"}}
+{"text": "把大壮的生日改成2022-02-14", "intent": "PET_PROFILE", "slots": {"petName": "大壮"}}
+{"text": "查一下奶糖的档案", "intent": "PET_PROFILE", "slots": {"petName": "奶糖"}}
+{"text": "帮我记录狗狗咪咪的信息", "intent": "PET_PROFILE", "slots": {"petName": "咪咪"}}
+{"text": "软删除豆豆", "intent": "PET_PROFILE", "slots": {"petName": "豆豆"}}
+{"text": "记一下我的宠物旺财，品种金毛", "intent": "PET_PROFILE", "slots": {"petName": "旺财"}}
+{"text": "给球球建个档案", "intent": "PET_PROFILE", "slots": {"petName": "球球"}}
+{"text": "删除花花的档案", "intent": "PET_PROFILE", "slots": {"petName": "花花"}}
+{"text": "更新可乐的体重到2.8公斤", "intent": "PET_PROFILE", "slots": {"petName": "可乐"}}
+{"text": "我的宠物叫什么来着", "intent": "PET_PROFILE", "slots": {"petName": "雪球"}}
+{"text": "添加宠物档案，名字布丁", "intent": "PET_PROFILE", "slots": {"petName": "布丁"}}
+{"text": "修改大壮的品种为边牧", "intent": "PET_PROFILE", "slots": {"petName": "大壮"}}
+{"text": "登记一只新猫，叫奶糖", "intent": "PET_PROFILE", "slots": {"petName": "奶糖"}}
+{"text": "把咪咪的生日改成2022-01-01", "intent": "PET_PROFILE", "slots": {"petName": "咪咪"}}
+{"text": "查一下豆豆的档案", "intent": "PET_PROFILE", "slots": {"petName": "豆豆"}}
+{"text": "帮我记录狗狗旺财的信息", "intent": "PET_PROFILE", "slots": {"petName": "旺财"}}
+{"text": "软删除球球", "intent": "PET_PROFILE", "slots": {"petName": "球球"}}
+{"text": "记一下我的宠物花花，品种泰迪", "intent": "PET_PROFILE", "slots": {"petName": "花花"}}
+{"text": "给可乐建个档案", "intent": "PET_PROFILE", "slots": {"petName": "可乐"}}
+{"text": "删除雪球的档案", "intent": "PET_PROFILE", "slots": {"petName": "雪球"}}
+{"text": "更新布丁的体重到5.5公斤", "intent": "PET_PROFILE", "slots": {"petName": "布丁"}}
+{"text": "我的宠物叫什么来着", "intent": "PET_PROFILE", "slots": {"petName": "大壮"}}
+{"text": "添加宠物档案，名字奶糖", "intent": "PET_PROFILE", "slots": {"petName": "奶糖"}}
+{"text": "修改咪咪的品种为柯基", "intent": "PET_PROFILE", "slots": {"petName": "咪咪"}}
+{"text": "登记一只新猫，叫豆豆", "intent": "PET_PROFILE", "slots": {"petName": "豆豆"}}
+{"text": "把旺财的生日改成2023-03-20", "intent": "PET_PROFILE", "slots": {"petName": "旺财"}}
+{"text": "查一下球球的档案", "intent": "PET_PROFILE", "slots": {"petName": "球球"}}
+{"text": "帮我记录狗狗花花的信息", "intent": "PET_PROFILE", "slots": {"petName": "花花"}}
+{"text": "软删除可乐", "intent": "PET_PROFILE", "slots": {"petName": "可乐"}}
+{"text": "记一下我的宠物雪球，品种英短", "intent": "PET_PROFILE", "slots": {"petName": "雪球"}}
+{"text": "给布丁建个档案", "intent": "PET_PROFILE", "slots": {"petName": "布丁"}}
+{"text": "删除大壮的档案", "intent": "PET_PROFILE", "slots": {"petName": "大壮"}}
+{"text": "更新奶糖的体重到9公斤", "intent": "PET_PROFILE", "slots": {"petName": "奶糖"}}
+{"text": "我的宠物叫什么来着", "intent": "PET_PROFILE", "slots": {"petName": "咪咪"}}
+{"text": "添加宠物档案，名字豆豆", "intent": "PET_PROFILE", "slots": {"petName": "豆豆"}}
+{"text": "修改旺财的品种为金毛", "intent": "PET_PROFILE", "slots": {"petName": "旺财"}}
+{"text": "登记一只新猫，叫球球", "intent": "PET_PROFILE", "slots": {"petName": "球球"}}
+{"text": "把花花的生日改成2022-09-09", "intent": "PET_PROFILE", "slots": {"petName": "花花"}}
+{"text": "查一下可乐的档案", "intent": "PET_PROFILE", "slots": {"petName": "可乐"}}
+{"text": "帮我记录狗狗雪球的信息", "intent": "PET_PROFILE", "slots": {"petName": "雪球"}}
+{"text": "软删除布丁", "intent": "PET_PROFILE", "slots": {"petName": "布丁"}}
+{"text": "记一下我的宠物大壮，品种边牧", "intent": "PET_PROFILE", "slots": {"petName": "大壮"}}
+{"text": "给奶糖建个档案", "intent": "PET_PROFILE", "slots": {"petName": "奶糖"}}
+{"text": "删除咪咪的档案", "intent": "PET_PROFILE", "slots": {"petName": "咪咪"}}
+{"text": "更新豆豆的体重到5公斤", "intent": "PET_PROFILE", "slots": {"petName": "豆豆"}}
+{"text": "我的宠物叫什么来着", "intent": "PET_PROFILE", "slots": {"petName": "旺财"}}
+{"text": "添加宠物档案，名字球球", "intent": "PET_PROFILE", "slots": {"petName": "球球"}}
+{"text": "修改花花的品种为泰迪", "intent": "PET_PROFILE", "slots": {"petName": "花花"}}
+{"text": "查一下快递 SF1234567890", "intent": "EXPRESS", "slots": {"trackingNo": "SF1234567890"}}
+{"text": "我的包裹到哪了", "intent": "EXPRESS", "slots": {}}
+{"text": "运单号 ZTO55667788 的物流信息", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO55667788"}}
+{"text": "京东快递 JD0099887766 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "JD0099887766"}}
+{"text": "帮我查物流", "intent": "EXPRESS", "slots": {}}
+{"text": "顺丰单号 YD3344556677 查询", "intent": "EXPRESS", "slots": {"trackingNo": "YD3344556677"}}
+{"text": "圆通 SF000111222 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "SF000111222"}}
+{"text": "韵达 YT123098 查一下", "intent": "EXPRESS", "slots": {"trackingNo": "YT123098"}}
+{"text": "中通 ZTO77665544 的快递", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO77665544"}}
+{"text": "EMS JD88776655 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "JD88776655"}}
+{"text": "邮政 SF1234567890 物流", "intent": "EXPRESS", "slots": {"trackingNo": "SF1234567890"}}
+{"text": "这个快递怎么还没到 YT9988776655", "intent": "EXPRESS", "slots": {"trackingNo": "YT9988776655"}}
+{"text": "查一下快递 ZTO55667788", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO55667788"}}
+{"text": "我的包裹到哪了", "intent": "EXPRESS", "slots": {}}
+{"text": "运单号 EMS1234567 的物流信息", "intent": "EXPRESS", "slots": {"trackingNo": "EMS1234567"}}
+{"text": "京东快递 YD3344556677 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "YD3344556677"}}
+{"text": "帮我查物流", "intent": "EXPRESS", "slots": {}}
+{"text": "顺丰单号 YT123098 查询", "intent": "EXPRESS", "slots": {"trackingNo": "YT123098"}}
+{"text": "圆通 ZTO77665544 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO77665544"}}
+{"text": "韵达 JD88776655 查一下", "intent": "EXPRESS", "slots": {"trackingNo": "JD88776655"}}
+{"text": "中通 SF1234567890 的快递", "intent": "EXPRESS", "slots": {"trackingNo": "SF1234567890"}}
+{"text": "EMS YT9988776655 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "YT9988776655"}}
+{"text": "邮政 ZTO55667788 物流", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO55667788"}}
+{"text": "这个快递怎么还没到 JD0099887766", "intent": "EXPRESS", "slots": {"trackingNo": "JD0099887766"}}
+{"text": "查一下快递 EMS1234567", "intent": "EXPRESS", "slots": {"trackingNo": "EMS1234567"}}
+{"text": "我的包裹到哪了", "intent": "EXPRESS", "slots": {}}
+{"text": "运单号 SF000111222 的物流信息", "intent": "EXPRESS", "slots": {"trackingNo": "SF000111222"}}
+{"text": "京东快递 YT123098 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "YT123098"}}
+{"text": "帮我查物流", "intent": "EXPRESS", "slots": {}}
+{"text": "顺丰单号 JD88776655 查询", "intent": "EXPRESS", "slots": {"trackingNo": "JD88776655"}}
+{"text": "圆通 SF1234567890 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "SF1234567890"}}
+{"text": "韵达 YT9988776655 查一下", "intent": "EXPRESS", "slots": {"trackingNo": "YT9988776655"}}
+{"text": "中通 ZTO55667788 的快递", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO55667788"}}
+{"text": "EMS JD0099887766 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "JD0099887766"}}
+{"text": "邮政 EMS1234567 物流", "intent": "EXPRESS", "slots": {"trackingNo": "EMS1234567"}}
+{"text": "这个快递怎么还没到 YD3344556677", "intent": "EXPRESS", "slots": {"trackingNo": "YD3344556677"}}
+{"text": "查一下快递 SF000111222", "intent": "EXPRESS", "slots": {"trackingNo": "SF000111222"}}
+{"text": "我的包裹到哪了", "intent": "EXPRESS", "slots": {}}
+{"text": "运单号 ZTO77665544 的物流信息", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO77665544"}}
+{"text": "京东快递 JD88776655 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "JD88776655"}}
+{"text": "帮我查物流", "intent": "EXPRESS", "slots": {}}
+{"text": "顺丰单号 YT9988776655 查询", "intent": "EXPRESS", "slots": {"trackingNo": "YT9988776655"}}
+{"text": "圆通 ZTO55667788 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO55667788"}}
+{"text": "韵达 JD0099887766 查一下", "intent": "EXPRESS", "slots": {"trackingNo": "JD0099887766"}}
+{"text": "中通 EMS1234567 的快递", "intent": "EXPRESS", "slots": {"trackingNo": "EMS1234567"}}
+{"text": "EMS YD3344556677 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "YD3344556677"}}
+{"text": "邮政 SF000111222 物流", "intent": "EXPRESS", "slots": {"trackingNo": "SF000111222"}}
+{"text": "这个快递怎么还没到 YT123098", "intent": "EXPRESS", "slots": {"trackingNo": "YT123098"}}
+{"text": "查一下快递 ZTO77665544", "intent": "EXPRESS", "slots": {"trackingNo": "ZTO77665544"}}
+{"text": "我的包裹到哪了", "intent": "EXPRESS", "slots": {}}
+{"text": "运单号 SF1234567890 的物流信息", "intent": "EXPRESS", "slots": {"trackingNo": "SF1234567890"}}
+{"text": "京东快递 YT9988776655 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "YT9988776655"}}
+{"text": "帮我查物流", "intent": "EXPRESS", "slots": {}}
+{"text": "顺丰单号 JD0099887766 查询", "intent": "EXPRESS", "slots": {"trackingNo": "JD0099887766"}}
+{"text": "圆通 EMS1234567 到哪了", "intent": "EXPRESS", "slots": {"trackingNo": "EMS1234567"}}
+{"text": "怎么去公司", "intent": "NAVIGATION", "slots": {"destination": "公司"}}
+{"text": "导航到人民广场", "intent": "NAVIGATION", "slots": {"destination": "人民广场"}}
+{"text": "开车去机场的路线", "intent": "NAVIGATION", "slots": {"destination": "机场"}}
+{"text": "步行到地铁站", "intent": "NAVIGATION", "slots": {"destination": "地铁站"}}
+{"text": "规划去超市的路线", "intent": "NAVIGATION", "slots": {"destination": "超市"}}
+{"text": "骑车去学校怎么走", "intent": "NAVIGATION", "slots": {"destination": "学校"}}
+{"text": "公交去医院", "intent": "NAVIGATION", "slots": {"destination": "医院"}}
+{"text": "从公园到菜市场怎么走", "intent": "NAVIGATION", "slots": {"destination": "公园"}}
+{"text": "帮我导航到火车站", "intent": "NAVIGATION", "slots": {"destination": "火车站"}}
+{"text": "去外婆家最快的路线", "intent": "NAVIGATION", "slots": {"destination": "外婆家"}}
+{"text": "怎么去公司", "intent": "NAVIGATION", "slots": {"destination": "公司"}}
+{"text": "导航到人民广场", "intent": "NAVIGATION", "slots": {"destination": "人民广场"}}
+{"text": "开车去机场的路线", "intent": "NAVIGATION", "slots": {"destination": "机场"}}
+{"text": "步行到地铁站", "intent": "NAVIGATION", "slots": {"destination": "地铁站"}}
+{"text": "规划去超市的路线", "intent": "NAVIGATION", "slots": {"destination": "超市"}}
+{"text": "骑车去学校怎么走", "intent": "NAVIGATION", "slots": {"destination": "学校"}}
+{"text": "公交去医院", "intent": "NAVIGATION", "slots": {"destination": "医院"}}
+{"text": "从公园到菜市场怎么走", "intent": "NAVIGATION", "slots": {"destination": "公园"}}
+{"text": "帮我导航到火车站", "intent": "NAVIGATION", "slots": {"destination": "火车站"}}
+{"text": "去外婆家最快的路线", "intent": "NAVIGATION", "slots": {"destination": "外婆家"}}
+{"text": "怎么去公司", "intent": "NAVIGATION", "slots": {"destination": "公司"}}
+{"text": "导航到人民广场", "intent": "NAVIGATION", "slots": {"destination": "人民广场"}}
+{"text": "开车去机场的路线", "intent": "NAVIGATION", "slots": {"destination": "机场"}}
+{"text": "步行到地铁站", "intent": "NAVIGATION", "slots": {"destination": "地铁站"}}
+{"text": "规划去超市的路线", "intent": "NAVIGATION", "slots": {"destination": "超市"}}
+{"text": "骑车去学校怎么走", "intent": "NAVIGATION", "slots": {"destination": "学校"}}
+{"text": "公交去医院", "intent": "NAVIGATION", "slots": {"destination": "医院"}}
+{"text": "从公园到菜市场怎么走", "intent": "NAVIGATION", "slots": {"destination": "公园"}}
+{"text": "帮我导航到火车站", "intent": "NAVIGATION", "slots": {"destination": "火车站"}}
+{"text": "去外婆家最快的路线", "intent": "NAVIGATION", "slots": {"destination": "外婆家"}}
+{"text": "怎么去公司", "intent": "NAVIGATION", "slots": {"destination": "公司"}}
+{"text": "导航到人民广场", "intent": "NAVIGATION", "slots": {"destination": "人民广场"}}
+{"text": "开车去机场的路线", "intent": "NAVIGATION", "slots": {"destination": "机场"}}
+{"text": "步行到地铁站", "intent": "NAVIGATION", "slots": {"destination": "地铁站"}}
+{"text": "规划去超市的路线", "intent": "NAVIGATION", "slots": {"destination": "超市"}}
+{"text": "骑车去学校怎么走", "intent": "NAVIGATION", "slots": {"destination": "学校"}}
+{"text": "公交去医院", "intent": "NAVIGATION", "slots": {"destination": "医院"}}
+{"text": "从公园到菜市场怎么走", "intent": "NAVIGATION", "slots": {"destination": "公园"}}
+{"text": "帮我导航到火车站", "intent": "NAVIGATION", "slots": {"destination": "火车站"}}
+{"text": "去外婆家最快的路线", "intent": "NAVIGATION", "slots": {"destination": "外婆家"}}
+{"text": "怎么去公司", "intent": "NAVIGATION", "slots": {"destination": "公司"}}
+{"text": "导航到人民广场", "intent": "NAVIGATION", "slots": {"destination": "人民广场"}}
+{"text": "开车去机场的路线", "intent": "NAVIGATION", "slots": {"destination": "机场"}}
+{"text": "步行到地铁站", "intent": "NAVIGATION", "slots": {"destination": "地铁站"}}
+{"text": "规划去超市的路线", "intent": "NAVIGATION", "slots": {"destination": "超市"}}
+{"text": "用语音读给我听", "intent": "TTS", "slots": {}}
+{"text": "把这段话合成语音", "intent": "TTS", "slots": {}}
+{"text": "念一下这段文字", "intent": "TTS", "slots": {}}
+{"text": "生成语音回复", "intent": "TTS", "slots": {}}
+{"text": "读出来给我听", "intent": "TTS", "slots": {}}
+{"text": "用语音播报", "intent": "TTS", "slots": {}}
+{"text": "把回复转成语音", "intent": "TTS", "slots": {}}
+{"text": "念这段文字", "intent": "TTS", "slots": {}}
+{"text": "用声音告诉我", "intent": "TTS", "slots": {}}
+{"text": "合成语音：明天有个会议", "intent": "TTS", "slots": {}}
+{"text": "用语音读给我听", "intent": "TTS", "slots": {}}
+{"text": "把这段话合成语音", "intent": "TTS", "slots": {}}
+{"text": "念一下这段文字", "intent": "TTS", "slots": {}}
+{"text": "生成语音回复", "intent": "TTS", "slots": {}}
+{"text": "读出来给我听", "intent": "TTS", "slots": {}}
+{"text": "用语音播报", "intent": "TTS", "slots": {}}
+{"text": "把回复转成语音", "intent": "TTS", "slots": {}}
+{"text": "念这段文字", "intent": "TTS", "slots": {}}
+{"text": "用声音告诉我", "intent": "TTS", "slots": {}}
+{"text": "合成语音：明天有个会议", "intent": "TTS", "slots": {}}
+{"text": "用语音读给我听", "intent": "TTS", "slots": {}}
+{"text": "把这段话合成语音", "intent": "TTS", "slots": {}}
+{"text": "念一下这段文字", "intent": "TTS", "slots": {}}
+{"text": "生成语音回复", "intent": "TTS", "slots": {}}
+{"text": "读出来给我听", "intent": "TTS", "slots": {}}
+{"text": "用语音播报", "intent": "TTS", "slots": {}}
+{"text": "把回复转成语音", "intent": "TTS", "slots": {}}
+{"text": "念这段文字", "intent": "TTS", "slots": {}}
+{"text": "用声音告诉我", "intent": "TTS", "slots": {}}
+{"text": "合成语音：明天有个会议", "intent": "TTS", "slots": {}}
+{"text": "用语音读给我听", "intent": "TTS", "slots": {}}
+{"text": "把这段话合成语音", "intent": "TTS", "slots": {}}
+{"text": "念一下这段文字", "intent": "TTS", "slots": {}}
+{"text": "生成语音回复", "intent": "TTS", "slots": {}}
+{"text": "读出来给我听", "intent": "TTS", "slots": {}}
+{"text": "用语音播报", "intent": "TTS", "slots": {}}
+{"text": "把回复转成语音", "intent": "TTS", "slots": {}}
+{"text": "念这段文字", "intent": "TTS", "slots": {}}
+{"text": "用声音告诉我", "intent": "TTS", "slots": {}}
+{"text": "合成语音：明天有个会议", "intent": "TTS", "slots": {}}
+{"text": "识别一下这张图片", "intent": "IMAGE", "slots": {}}
+{"text": "这是什么猫", "intent": "IMAGE", "slots": {}}
+{"text": "读一下图里的字", "intent": "IMAGE", "slots": {}}
+{"text": "看看这张照片里有什么", "intent": "IMAGE", "slots": {}}
+{"text": "OCR 这张图", "intent": "IMAGE", "slots": {}}
+{"text": "识别宠物", "intent": "IMAGE", "slots": {}}
+{"text": "这张图里是什么物体", "intent": "IMAGE", "slots": {}}
+{"text": "帮我看看图片内容", "intent": "IMAGE", "slots": {}}
+{"text": "识别图中的物品", "intent": "IMAGE", "slots": {}}
+{"text": "图里的小狗是什么品种", "intent": "IMAGE", "slots": {}}
+{"text": "识别一下这张图片", "intent": "IMAGE", "slots": {}}
+{"text": "这是什么猫", "intent": "IMAGE", "slots": {}}
+{"text": "读一下图里的字", "intent": "IMAGE", "slots": {}}
+{"text": "看看这张照片里有什么", "intent": "IMAGE", "slots": {}}
+{"text": "OCR 这张图", "intent": "IMAGE", "slots": {}}
+{"text": "识别宠物", "intent": "IMAGE", "slots": {}}
+{"text": "这张图里是什么物体", "intent": "IMAGE", "slots": {}}
+{"text": "帮我看看图片内容", "intent": "IMAGE", "slots": {}}
+{"text": "识别图中的物品", "intent": "IMAGE", "slots": {}}
+{"text": "图里的小狗是什么品种", "intent": "IMAGE", "slots": {}}
+{"text": "识别一下这张图片", "intent": "IMAGE", "slots": {}}
+{"text": "这是什么猫", "intent": "IMAGE", "slots": {}}
+{"text": "读一下图里的字", "intent": "IMAGE", "slots": {}}
+{"text": "看看这张照片里有什么", "intent": "IMAGE", "slots": {}}
+{"text": "OCR 这张图", "intent": "IMAGE", "slots": {}}
+{"text": "识别宠物", "intent": "IMAGE", "slots": {}}
+{"text": "这张图里是什么物体", "intent": "IMAGE", "slots": {}}
+{"text": "帮我看看图片内容", "intent": "IMAGE", "slots": {}}
+{"text": "识别图中的物品", "intent": "IMAGE", "slots": {}}
+{"text": "图里的小狗是什么品种", "intent": "IMAGE", "slots": {}}
+{"text": "识别一下这张图片", "intent": "IMAGE", "slots": {}}
+{"text": "这是什么猫", "intent": "IMAGE", "slots": {}}
+{"text": "读一下图里的字", "intent": "IMAGE", "slots": {}}
+{"text": "看看这张照片里有什么", "intent": "IMAGE", "slots": {}}
+{"text": "OCR 这张图", "intent": "IMAGE", "slots": {}}
+{"text": "识别宠物", "intent": "IMAGE", "slots": {}}
+{"text": "这张图里是什么物体", "intent": "IMAGE", "slots": {}}
+{"text": "帮我看看图片内容", "intent": "IMAGE", "slots": {}}
+{"text": "识别图中的物品", "intent": "IMAGE", "slots": {}}
+{"text": "图里的小狗是什么品种", "intent": "IMAGE", "slots": {}}
+{"text": "今天天气不错", "intent": "CHITCHAT", "slots": {}}
+{"text": "你叫什么名字", "intent": "CHITCHAT", "slots": {}}
+{"text": "讲个笑话", "intent": "CHITCHAT", "slots": {}}
+{"text": "你好呀", "intent": "CHITCHAT", "slots": {}}
+{"text": "最近好吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "你是谁", "intent": "CHITCHAT", "slots": {}}
+{"text": "谢谢", "intent": "CHITCHAT", "slots": {}}
+{"text": "在吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "陪我聊聊天", "intent": "CHITCHAT", "slots": {}}
+{"text": "你喜欢什么", "intent": "CHITCHAT", "slots": {}}
+{"text": "今天天气不错", "intent": "CHITCHAT", "slots": {}}
+{"text": "你叫什么名字", "intent": "CHITCHAT", "slots": {}}
+{"text": "讲个笑话", "intent": "CHITCHAT", "slots": {}}
+{"text": "你好呀", "intent": "CHITCHAT", "slots": {}}
+{"text": "最近好吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "你是谁", "intent": "CHITCHAT", "slots": {}}
+{"text": "谢谢", "intent": "CHITCHAT", "slots": {}}
+{"text": "在吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "陪我聊聊天", "intent": "CHITCHAT", "slots": {}}
+{"text": "你喜欢什么", "intent": "CHITCHAT", "slots": {}}
+{"text": "今天天气不错", "intent": "CHITCHAT", "slots": {}}
+{"text": "你叫什么名字", "intent": "CHITCHAT", "slots": {}}
+{"text": "讲个笑话", "intent": "CHITCHAT", "slots": {}}
+{"text": "你好呀", "intent": "CHITCHAT", "slots": {}}
+{"text": "最近好吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "你是谁", "intent": "CHITCHAT", "slots": {}}
+{"text": "谢谢", "intent": "CHITCHAT", "slots": {}}
+{"text": "在吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "陪我聊聊天", "intent": "CHITCHAT", "slots": {}}
+{"text": "你喜欢什么", "intent": "CHITCHAT", "slots": {}}
+{"text": "今天天气不错", "intent": "CHITCHAT", "slots": {}}
+{"text": "你叫什么名字", "intent": "CHITCHAT", "slots": {}}
+{"text": "讲个笑话", "intent": "CHITCHAT", "slots": {}}
+{"text": "你好呀", "intent": "CHITCHAT", "slots": {}}
+{"text": "最近好吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "你是谁", "intent": "CHITCHAT", "slots": {}}
+{"text": "谢谢", "intent": "CHITCHAT", "slots": {}}
+{"text": "在吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "陪我聊聊天", "intent": "CHITCHAT", "slots": {}}
+{"text": "你喜欢什么", "intent": "CHITCHAT", "slots": {}}
+{"text": "今天天气不错", "intent": "CHITCHAT", "slots": {}}
+{"text": "你叫什么名字", "intent": "CHITCHAT", "slots": {}}
+{"text": "讲个笑话", "intent": "CHITCHAT", "slots": {}}
+{"text": "你好呀", "intent": "CHITCHAT", "slots": {}}
+{"text": "最近好吗", "intent": "CHITCHAT", "slots": {}}
+{"text": "asdfghjkl", "intent": "UNKNOWN", "slots": {}}
+{"text": "？？？？？", "intent": "UNKNOWN", "slots": {}}
+{"text": "随便说说吧", "intent": "UNKNOWN", "slots": {}}
+{"text": "123456789", "intent": "UNKNOWN", "slots": {}}
+{"text": "。。。。", "intent": "UNKNOWN", "slots": {}}
+{"text": "测试测试", "intent": "UNKNOWN", "slots": {}}
+{"text": "嗯嗯嗯", "intent": "UNKNOWN", "slots": {}}
+{"text": "蛤蛤蛤", "intent": "UNKNOWN", "slots": {}}
+{"text": "哦哦哦", "intent": "UNKNOWN", "slots": {}}
+{"text": "啊吧啊吧", "intent": "UNKNOWN", "slots": {}}
+{"text": "asdfghjkl", "intent": "UNKNOWN", "slots": {}}
+{"text": "？？？？？", "intent": "UNKNOWN", "slots": {}}
+{"text": "随便说说吧", "intent": "UNKNOWN", "slots": {}}
+{"text": "123456789", "intent": "UNKNOWN", "slots": {}}
+{"text": "。。。。", "intent": "UNKNOWN", "slots": {}}
+{"text": "测试测试", "intent": "UNKNOWN", "slots": {}}
+{"text": "嗯嗯嗯", "intent": "UNKNOWN", "slots": {}}
+{"text": "蛤蛤蛤", "intent": "UNKNOWN", "slots": {}}
+{"text": "哦哦哦", "intent": "UNKNOWN", "slots": {}}
+{"text": "啊吧啊吧", "intent": "UNKNOWN", "slots": {}}
+{"text": "asdfghjkl", "intent": "UNKNOWN", "slots": {}}
+{"text": "？？？？？", "intent": "UNKNOWN", "slots": {}}
+{"text": "随便说说吧", "intent": "UNKNOWN", "slots": {}}
+{"text": "123456789", "intent": "UNKNOWN", "slots": {}}
+{"text": "。。。。", "intent": "UNKNOWN", "slots": {}}
+{"text": "测试测试", "intent": "UNKNOWN", "slots": {}}
+{"text": "嗯嗯嗯", "intent": "UNKNOWN", "slots": {}}
+{"text": "蛤蛤蛤", "intent": "UNKNOWN", "slots": {}}
+{"text": "哦哦哦", "intent": "UNKNOWN", "slots": {}}
+{"text": "啊吧啊吧", "intent": "UNKNOWN", "slots": {}}
+{"text": "asdfghjkl", "intent": "UNKNOWN", "slots": {}}
+{"text": "？？？？？", "intent": "UNKNOWN", "slots": {}}
+{"text": "随便说说吧", "intent": "UNKNOWN", "slots": {}}
+{"text": "123456789", "intent": "UNKNOWN", "slots": {}}
+{"text": "。。。。", "intent": "UNKNOWN", "slots": {}}
+{"text": "测试测试", "intent": "UNKNOWN", "slots": {}}
+{"text": "嗯嗯嗯", "intent": "UNKNOWN", "slots": {}}
+{"text": "蛤蛤蛤", "intent": "UNKNOWN", "slots": {}}
+{"text": "哦哦哦", "intent": "UNKNOWN", "slots": {}}
+{"text": "啊吧啊吧", "intent": "UNKNOWN", "slots": {}}

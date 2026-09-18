@@ -1,7 +1,8 @@
 package com.lumensteward.clawbot.infrastructure.client.logistics;
 
 import com.lumensteward.clawbot.common.util.MaskUtils;
-import com.lumensteward.clawbot.infrastructure.client.logistics.model.ExpressTrace;
+import com.lumensteward.clawbot.domain.port.ExpressQueryPort;
+import com.lumensteward.clawbot.domain.port.model.ExpressTrace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -13,10 +14,12 @@ import java.util.List;
 /**
  * 物流查询 Mock 实现（SRS FR-12，AC-D1：无外网）。
  *
- * <p>返回确定性轨迹；对特定运单号返回「查无数据」以覆盖 L3 空结果分支。日志脱敏运单号（BR-15）。
+ * <p>实现领域端口 {@link com.lumensteward.clawbot.domain.port.ExpressQueryPort}（上提自原
+ * {@code LogisticsClient} 接口）。返回确定性轨迹；对特定运单号返回「查无数据」以覆盖 L3 空结果分支。
+ * 日志脱敏运单号（BR-15）。
  */
 @Component
-public class MockLogisticsClient implements LogisticsClient {
+public class MockLogisticsClient implements ExpressQueryPort {
 
     private static final Logger log = LoggerFactory.getLogger(MockLogisticsClient.class);
 

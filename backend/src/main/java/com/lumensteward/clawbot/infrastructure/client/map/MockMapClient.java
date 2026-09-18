@@ -1,8 +1,9 @@
 package com.lumensteward.clawbot.infrastructure.client.map;
 
-import com.lumensteward.clawbot.infrastructure.client.map.model.GeoPoint;
-import com.lumensteward.clawbot.infrastructure.client.map.model.RouteMode;
-import com.lumensteward.clawbot.infrastructure.client.map.model.RouteResult;
+import com.lumensteward.clawbot.domain.port.MapNavigationPort;
+import com.lumensteward.clawbot.domain.port.model.GeoPoint;
+import com.lumensteward.clawbot.domain.port.model.RouteMode;
+import com.lumensteward.clawbot.domain.port.model.RouteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -10,10 +11,11 @@ import org.springframework.stereotype.Component;
 /**
  * 地图服务 Mock 实现（SRS FR-13，AC-D1：无外网）。
  *
- * <p>返回确定性坐标与路线；不落库原始坐标（BR-17）。
+ * <p>实现领域端口 {@link com.lumensteward.clawbot.domain.port.MapNavigationPort}（上提自原
+ * {@code MapClient} 接口）。返回确定性坐标与路线；不落库原始坐标（BR-17）。
  */
 @Component
-public class MockMapClient implements MapClient {
+public class MockMapClient implements MapNavigationPort {
 
     private static final Logger log = LoggerFactory.getLogger(MockMapClient.class);
 

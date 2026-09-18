@@ -1,7 +1,7 @@
-package com.lumensteward.clawbot.infrastructure.client.map.model;
+package com.lumensteward.clawbot.domain.port.model;
 
 /**
- * 地理坐标点（SRS FR-13）。
+ * 地理坐标点（领域端口 DTO，上提自 {@code infrastructure/client/map/model}）。
  *
  * <p>遵循 GCJ-02 坐标系（BR-16）；位置信息仅临时使用、不落库原始坐标（BR-17）。
  *
