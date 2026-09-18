@@ -1,7 +1,6 @@
 package com.lumensteward.clawbot.infrastructure.bootstrap;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.lumensteward.clawbot.infrastructure.config.properties.AdminBootstrapProperties;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.SysAdminUserEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.SysAdminUserMapper;
 import org.slf4j.Logger;
@@ -16,10 +15,10 @@ import org.springframework.stereotype.Component;
  *
  * <p>{@link ApplicationRunner}，{@code @Order(1)}，早于 Startup Doctor 的展示时机。逻辑：
  * <ol>
- *   <li>定位初始管理员（默认 {@code superadmin}）；</li>
- *   <li>若其 {@code password_hash} 仍为占位标记 {@link AdminInitializer#PLACEHOLDER_HASH}，
- *       则经 {@link AdminInitializer} 从环境变量取得明文口令并计算 BCrypt 覆写；</li>
- *   <li>非占位（已注入）或无记录时跳过，保证幂等。</li>
+ *   <li>定位所有口令仍为占位标记 {@link AdminInitializer#PLACEHOLDER_HASH} 的 seeded 管理员；</li>
+ *   <li>以环境变量 {@code ADMIN_INIT_PASSWORD}（或 local 下生成的一次性口令）计算 BCrypt，
+ *       对全部占位账号统一注入（superadmin 与 operator 等同享同一初始口令）；</li>
+ *   <li>非占位（已注入）时无记录，跳过，保证幂等。</li>
  * </ol>
  */
 @Component
@@ -30,43 +29,37 @@ public class AdminBootstrapRunner implements ApplicationRunner {
 
     private final SysAdminUserMapper sysAdminUserMapper;
     private final AdminInitializer adminInitializer;
-    private final AdminBootstrapProperties adminBootstrapProperties;
 
     /**
      * 构造器注入（G-14）。
      *
-     * @param sysAdminUserMapper      管理员 Mapper
-     * @param adminInitializer        口令注入器
-     * @param adminBootstrapProperties 初始管理员引导配置
+     * @param sysAdminUserMapper 管理员 Mapper
+     * @param adminInitializer   口令注入器
      */
     public AdminBootstrapRunner(SysAdminUserMapper sysAdminUserMapper,
-                                AdminInitializer adminInitializer,
-                                AdminBootstrapProperties adminBootstrapProperties) {
+                                AdminInitializer adminInitializer) {
         this.sysAdminUserMapper = sysAdminUserMapper;
         this.adminInitializer = adminInitializer;
-        this.adminBootstrapProperties = adminBootstrapProperties;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        String username = adminBootstrapProperties.username();
-        SysAdminUserEntity admin = sysAdminUserMapper.selectOne(
+        var placeholders = sysAdminUserMapper.selectList(
                 new LambdaQueryWrapper<SysAdminUserEntity>()
-                        .eq(SysAdminUserEntity::getUsername, username)
-                        .last("LIMIT 1"));
+                        .eq(SysAdminUserEntity::getPasswordHash, AdminInitializer.PLACEHOLDER_HASH));
 
-        if (admin == null) {
-            log.info("未发现初始管理员[{}]，跳过口令注入", username);
-            return;
-        }
-        if (!AdminInitializer.PLACEHOLDER_HASH.equals(admin.getPasswordHash())) {
-            log.info("初始管理员[{}]口令已注入，跳过", username);
+        if (placeholders.isEmpty()) {
+            log.info("未发现占位口令的初始管理员，跳过口令注入");
             return;
         }
 
+        // 仅解析一次口令，确保所有占位账号共享同一初始口令（便于 e2e / 本地登录）
         String rawPassword = adminInitializer.resolveInitialPassword();
-        admin.setPasswordHash(adminInitializer.encode(rawPassword));
-        sysAdminUserMapper.updateById(admin);
-        log.info("初始管理员[{}]口令已从环境变量注入（BCrypt）", username);
+        String encoded = adminInitializer.encode(rawPassword);
+        for (SysAdminUserEntity admin : placeholders) {
+            admin.setPasswordHash(encoded);
+            sysAdminUserMapper.updateById(admin);
+        }
+        log.info("已为 {} 个占位初始管理员注入口令（BCrypt）", placeholders.size());
     }
 }
