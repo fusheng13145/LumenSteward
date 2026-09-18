@@ -36,9 +36,11 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+**/.env.e2e
 
 # ===== 日志与运行时产物 =====
 logs/
+buildlog/
 *.log
 hs_err_pid*
 replay_pid*
