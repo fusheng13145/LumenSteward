@@ -63,14 +63,32 @@ onMounted(load)
   <section>
     <h2>审计日志</h2>
 
-    <el-form class="filters" inline @submit.prevent="search">
+    <el-form
+      class="filters"
+      inline
+      @submit.prevent="search"
+    >
       <el-form-item label="资源类型">
-        <el-select v-model="filters.regType" placeholder="全部" clearable style="width: 150px">
-          <el-option v-for="item in REG_TYPE_OPTIONS" :key="item" :label="item" :value="item" />
+        <el-select
+          v-model="filters.regType"
+          placeholder="全部"
+          clearable
+          style="width: 150px"
+        >
+          <el-option
+            v-for="item in REG_TYPE_OPTIONS"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="操作">
-        <el-input v-model="filters.action" clearable style="width: 170px" />
+        <el-input
+          v-model="filters.action"
+          clearable
+          style="width: 170px"
+        />
       </el-form-item>
       <el-form-item label="时间范围">
         <el-date-picker
@@ -83,30 +101,79 @@ onMounted(load)
         />
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="search">查询</el-button>
+        <el-button
+          type="primary"
+          @click="search"
+        >
+          查询
+        </el-button>
       </el-form-item>
     </el-form>
 
-    <el-table v-loading="loading" :data="rows" border size="small">
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column label="时间" width="170">
+    <el-table
+      v-loading="loading"
+      :data="rows"
+      border
+      size="small"
+    >
+      <el-table-column
+        prop="id"
+        label="ID"
+        width="80"
+      />
+      <el-table-column
+        label="时间"
+        width="170"
+      >
         <template #default="{ row }">
           {{ row.createdAt ? dayjs(row.createdAt).format('YYYY-MM-DD HH:mm:ss') : '—' }}
         </template>
       </el-table-column>
-      <el-table-column prop="regType" label="资源类型" width="120" />
-      <el-table-column prop="action" label="操作" width="160" />
-      <el-table-column prop="target" label="对象" min-width="140" show-overflow-tooltip />
-      <el-table-column prop="adminId" label="操作人" width="90" />
-      <el-table-column prop="ip" label="IP" width="140" />
-      <el-table-column label="结果" width="90">
+      <el-table-column
+        prop="regType"
+        label="资源类型"
+        width="120"
+      />
+      <el-table-column
+        prop="action"
+        label="操作"
+        width="160"
+      />
+      <el-table-column
+        prop="target"
+        label="对象"
+        min-width="140"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="adminId"
+        label="操作人"
+        width="90"
+      />
+      <el-table-column
+        prop="ip"
+        label="IP"
+        width="140"
+      />
+      <el-table-column
+        label="结果"
+        width="90"
+      >
         <template #default="{ row }">
-          <el-tag :type="row.result === 1 ? 'success' : 'danger'" size="small">
+          <el-tag
+            :type="row.result === 1 ? 'success' : 'danger'"
+            size="small"
+          >
             {{ row.result === 1 ? '成功' : '失败' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
+      <el-table-column
+        prop="reason"
+        label="原因"
+        min-width="160"
+        show-overflow-tooltip
+      />
     </el-table>
 
     <el-pagination

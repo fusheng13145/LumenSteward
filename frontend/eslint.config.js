@@ -24,6 +24,12 @@ export default [
     rules: {
       // 本项目页面组件以单一名词命名（login、dashboard），放行多词约束
       'vue/multi-word-component-names': 'off',
+      // rest 解构排除字段为官方认可惯用法（ignoreRestSiblings）；
+      // 下划线前缀变量按惯例视为有意忽略
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { ignoreRestSiblings: true, varsIgnorePattern: '^_' },
+      ],
     },
   },
 ]

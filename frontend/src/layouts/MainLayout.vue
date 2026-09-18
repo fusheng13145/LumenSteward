@@ -58,11 +58,18 @@ onMounted(async () => {
 <template>
   <div class="layout">
     <header class="layout__header">
-      <div class="layout__brand">{{ appTitle }}</div>
+      <div class="layout__brand">
+        {{ appTitle }}
+      </div>
       <div class="layout__user">
         <span>{{ auth.displayName || auth.username || '未登录' }}</span>
         <em>({{ roleLabel }})</em>
-        <button type="button" @click="handleLogout">退出登录</button>
+        <button
+          type="button"
+          @click="handleLogout"
+        >
+          退出登录
+        </button>
       </div>
     </header>
 

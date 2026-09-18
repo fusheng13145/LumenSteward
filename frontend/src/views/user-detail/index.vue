@@ -126,16 +126,39 @@ onMounted(load)
 
 <template>
   <section v-loading="loading">
-    <el-page-header content="用户详情" @back="router.back()" />
+    <el-page-header
+      content="用户详情"
+      @back="router.back()"
+    />
 
-    <el-descriptions v-if="detail" class="desc" :column="3" border size="small">
-      <el-descriptions-item label="ID">{{ detail.id }}</el-descriptions-item>
-      <el-descriptions-item label="openid（脱敏）">{{ maskOpenid(detail.openid) }}</el-descriptions-item>
-      <el-descriptions-item label="昵称">{{ detail.nickname || '—' }}</el-descriptions-item>
-      <el-descriptions-item label="状态">{{ detail.status === 1 ? '正常' : '禁用' }}</el-descriptions-item>
-      <el-descriptions-item label="宠物数">{{ detail.petCount }}</el-descriptions-item>
-      <el-descriptions-item label="会话数">{{ detail.sessionCount }}</el-descriptions-item>
-      <el-descriptions-item label="工具调用数">{{ detail.toolCallCount }}</el-descriptions-item>
+    <el-descriptions
+      v-if="detail"
+      class="desc"
+      :column="3"
+      border
+      size="small"
+    >
+      <el-descriptions-item label="ID">
+        {{ detail.id }}
+      </el-descriptions-item>
+      <el-descriptions-item label="openid（脱敏）">
+        {{ maskOpenid(detail.openid) }}
+      </el-descriptions-item>
+      <el-descriptions-item label="昵称">
+        {{ detail.nickname || '—' }}
+      </el-descriptions-item>
+      <el-descriptions-item label="状态">
+        {{ detail.status === 1 ? '正常' : '禁用' }}
+      </el-descriptions-item>
+      <el-descriptions-item label="宠物数">
+        {{ detail.petCount }}
+      </el-descriptions-item>
+      <el-descriptions-item label="会话数">
+        {{ detail.sessionCount }}
+      </el-descriptions-item>
+      <el-descriptions-item label="工具调用数">
+        {{ detail.toolCallCount }}
+      </el-descriptions-item>
       <el-descriptions-item label="最后交互">
         {{ detail.lastInteractAt ? dayjs(detail.lastInteractAt).format('YYYY-MM-DD HH:mm') : '—' }}
       </el-descriptions-item>
@@ -143,47 +166,129 @@ onMounted(load)
 
     <div class="toolbar">
       <h3>宠物档案</h3>
-      <el-button v-permission="PERMISSIONS.PROFILE_WRITE" type="primary" @click="openCreate">
+      <el-button
+        v-permission="PERMISSIONS.PROFILE_WRITE"
+        type="primary"
+        @click="openCreate"
+      >
         新增档案
       </el-button>
     </div>
 
-    <el-table :data="pets" border size="small">
-      <el-table-column prop="petName" label="昵称" min-width="100" />
-      <el-table-column prop="petType" label="类型" width="90" />
-      <el-table-column prop="breed" label="品种" min-width="100" />
-      <el-table-column prop="gender" label="性别" width="90" />
-      <el-table-column prop="birthday" label="生日" width="120" />
-      <el-table-column prop="weightKg" label="体重(kg)" width="100" />
-      <el-table-column prop="personality" label="性格" min-width="120" show-overflow-tooltip />
-      <el-table-column label="操作" width="150" fixed="right">
+    <el-table
+      :data="pets"
+      border
+      size="small"
+    >
+      <el-table-column
+        prop="petName"
+        label="昵称"
+        min-width="100"
+      />
+      <el-table-column
+        prop="petType"
+        label="类型"
+        width="90"
+      />
+      <el-table-column
+        prop="breed"
+        label="品种"
+        min-width="100"
+      />
+      <el-table-column
+        prop="gender"
+        label="性别"
+        width="90"
+      />
+      <el-table-column
+        prop="birthday"
+        label="生日"
+        width="120"
+      />
+      <el-table-column
+        prop="weightKg"
+        label="体重(kg)"
+        width="100"
+      />
+      <el-table-column
+        prop="personality"
+        label="性格"
+        min-width="120"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="操作"
+        width="150"
+        fixed="right"
+      >
         <template #default="{ row }">
-          <el-button v-permission="PERMISSIONS.PROFILE_WRITE" link type="primary" @click="openEdit(row)">
+          <el-button
+            v-permission="PERMISSIONS.PROFILE_WRITE"
+            link
+            type="primary"
+            @click="openEdit(row)"
+          >
             编辑
           </el-button>
-          <el-button v-permission="PERMISSIONS.PROFILE_WRITE" link type="danger" @click="remove(row)">
+          <el-button
+            v-permission="PERMISSIONS.PROFILE_WRITE"
+            link
+            type="danger"
+            @click="remove(row)"
+          >
             删除
           </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑档案' : '新增档案'" width="480px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editing ? '编辑档案' : '新增档案'"
+      width="480px"
+    >
       <el-form label-width="80px">
-        <el-form-item label="昵称" required>
-          <el-input v-model="form.petName" maxlength="32" :disabled="Boolean(editing)" />
+        <el-form-item
+          label="昵称"
+          required
+        >
+          <el-input
+            v-model="form.petName"
+            maxlength="32"
+            :disabled="Boolean(editing)"
+          />
         </el-form-item>
         <el-form-item label="类型">
-          <el-select v-model="form.petType" clearable placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in PET_TYPES" :key="item" :label="item" :value="item" />
+          <el-select
+            v-model="form.petType"
+            clearable
+            placeholder="请选择"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in PET_TYPES"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="品种">
           <el-input v-model="form.breed" />
         </el-form-item>
         <el-form-item label="性别">
-          <el-select v-model="form.gender" clearable placeholder="请选择" style="width: 100%">
-            <el-option v-for="item in GENDERS" :key="item" :label="item" :value="item" />
+          <el-select
+            v-model="form.gender"
+            clearable
+            placeholder="请选择"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in GENDERS"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="生日">
@@ -196,18 +301,35 @@ onMounted(load)
           />
         </el-form-item>
         <el-form-item label="体重(kg)">
-          <el-input-number v-model="form.weightKg" :min="0.1" :step="0.1" :precision="2" />
+          <el-input-number
+            v-model="form.weightKg"
+            :min="0.1"
+            :step="0.1"
+            :precision="2"
+          />
         </el-form-item>
         <el-form-item label="性格">
           <el-input v-model="form.personality" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.notes" type="textarea" :rows="2" />
+          <el-input
+            v-model="form.notes"
+            type="textarea"
+            :rows="2"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submit">保存</el-button>
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          @click="submit"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </section>

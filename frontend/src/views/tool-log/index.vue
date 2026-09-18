@@ -144,26 +144,60 @@ onMounted(() => {
     <h2>工具调用日志</h2>
 
     <div class="cards">
-      <div v-for="card in statsCards" :key="card.key" class="card">
-        <div class="card__label">{{ card.label }}</div>
-        <div class="card__value">{{ card.value }}</div>
+      <div
+        v-for="card in statsCards"
+        :key="card.key"
+        class="card"
+      >
+        <div class="card__label">
+          {{ card.label }}
+        </div>
+        <div class="card__value">
+          {{ card.value }}
+        </div>
       </div>
     </div>
 
-    <el-form class="filters" inline @submit.prevent="search">
+    <el-form
+      class="filters"
+      inline
+      @submit.prevent="search"
+    >
       <el-form-item label="traceId">
-        <el-input v-model="filters.traceId" clearable style="width: 180px" />
+        <el-input
+          v-model="filters.traceId"
+          clearable
+          style="width: 180px"
+        />
       </el-form-item>
       <el-form-item label="工具名">
-        <el-input v-model="filters.toolName" clearable style="width: 160px" />
+        <el-input
+          v-model="filters.toolName"
+          clearable
+          style="width: 160px"
+        />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="filters.status" placeholder="全部" clearable style="width: 120px">
-          <el-option v-for="item in STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+        <el-select
+          v-model="filters.status"
+          placeholder="全部"
+          clearable
+          style="width: 120px"
+        >
+          <el-option
+            v-for="item in STATUS_OPTIONS"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="openid">
-        <el-input v-model="filters.openid" clearable style="width: 180px" />
+        <el-input
+          v-model="filters.openid"
+          clearable
+          style="width: 180px"
+        />
       </el-form-item>
       <el-form-item label="时间范围">
         <el-date-picker
@@ -176,35 +210,95 @@ onMounted(() => {
         />
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="search">查询</el-button>
+        <el-button
+          type="primary"
+          @click="search"
+        >
+          查询
+        </el-button>
       </el-form-item>
     </el-form>
 
-    <el-table v-loading="loading" :data="rows" border size="small">
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="traceId" label="traceId" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="toolName" label="工具" width="170" />
-      <el-table-column label="状态" width="90">
+    <el-table
+      v-loading="loading"
+      :data="rows"
+      border
+      size="small"
+    >
+      <el-table-column
+        prop="id"
+        label="ID"
+        width="80"
+      />
+      <el-table-column
+        prop="traceId"
+        label="traceId"
+        min-width="180"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="toolName"
+        label="工具"
+        width="170"
+      />
+      <el-table-column
+        label="状态"
+        width="90"
+      >
         <template #default="{ row }">
-          <el-tag :type="statusTag(row.status)" size="small">
+          <el-tag
+            :type="statusTag(row.status)"
+            size="small"
+          >
             {{ TOOL_STATUS_LABELS[row.status] ?? row.status }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="errorType" label="异常层" width="90" />
-      <el-table-column prop="fallbackReason" label="降级原因" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="latencyMs" label="耗时(ms)" width="100" />
-      <el-table-column label="openid" width="150">
-        <template #default="{ row }">{{ maskOpenid(row.openid) }}</template>
+      <el-table-column
+        prop="errorType"
+        label="异常层"
+        width="90"
+      />
+      <el-table-column
+        prop="fallbackReason"
+        label="降级原因"
+        min-width="150"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="latencyMs"
+        label="耗时(ms)"
+        width="100"
+      />
+      <el-table-column
+        label="openid"
+        width="150"
+      >
+        <template #default="{ row }">
+          {{ maskOpenid(row.openid) }}
+        </template>
       </el-table-column>
-      <el-table-column label="时间" width="170">
+      <el-table-column
+        label="时间"
+        width="170"
+      >
         <template #default="{ row }">
           {{ row.createdAt ? dayjs(row.createdAt).format('YYYY-MM-DD HH:mm:ss') : '—' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right">
+      <el-table-column
+        label="操作"
+        width="90"
+        fixed="right"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+          <el-button
+            link
+            type="primary"
+            @click="openDetail(row)"
+          >
+            详情
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -218,23 +312,51 @@ onMounted(() => {
       @current-change="(value: number) => { page.page = value; load() }"
     />
 
-    <el-dialog v-model="detailVisible" title="工具调用详情" width="640px">
-      <el-descriptions v-if="detail" :column="2" border size="small">
-        <el-descriptions-item label="traceId">{{ detail.traceId }}</el-descriptions-item>
-        <el-descriptions-item label="工具名">{{ detail.toolName }}</el-descriptions-item>
+    <el-dialog
+      v-model="detailVisible"
+      title="工具调用详情"
+      width="640px"
+    >
+      <el-descriptions
+        v-if="detail"
+        :column="2"
+        border
+        size="small"
+      >
+        <el-descriptions-item label="traceId">
+          {{ detail.traceId }}
+        </el-descriptions-item>
+        <el-descriptions-item label="工具名">
+          {{ detail.toolName }}
+        </el-descriptions-item>
         <el-descriptions-item label="状态">
           {{ TOOL_STATUS_LABELS[detail.status] ?? detail.status }}
         </el-descriptions-item>
-        <el-descriptions-item label="异常层">{{ detail.errorType || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="耗时(ms)">{{ detail.latencyMs ?? '—' }}</el-descriptions-item>
-        <el-descriptions-item label="Agent 轮次">{{ detail.llmRound ?? '—' }}</el-descriptions-item>
-        <el-descriptions-item label="降级原因" :span="2">
+        <el-descriptions-item label="异常层">
+          {{ detail.errorType || '—' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="耗时(ms)">
+          {{ detail.latencyMs ?? '—' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="Agent 轮次">
+          {{ detail.llmRound ?? '—' }}
+        </el-descriptions-item>
+        <el-descriptions-item
+          label="降级原因"
+          :span="2"
+        >
           {{ detail.fallbackReason || '—' }}
         </el-descriptions-item>
-        <el-descriptions-item label="入参" :span="2">
+        <el-descriptions-item
+          label="入参"
+          :span="2"
+        >
           <pre class="json">{{ detail.paramsJson || '—' }}</pre>
         </el-descriptions-item>
-        <el-descriptions-item label="结果" :span="2">
+        <el-descriptions-item
+          label="结果"
+          :span="2"
+        >
           <pre class="json">{{ detail.resultJson || '—' }}</pre>
         </el-descriptions-item>
       </el-descriptions>

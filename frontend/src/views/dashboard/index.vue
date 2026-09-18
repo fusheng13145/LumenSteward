@@ -81,13 +81,23 @@ onMounted(load)
     </p>
 
     <div class="cards">
-      <div v-for="card in cards" :key="card.key" class="card">
-        <div class="card__label">{{ card.label }}</div>
-        <div class="card__value">{{ card.value }}</div>
+      <div
+        v-for="card in cards"
+        :key="card.key"
+        class="card"
+      >
+        <div class="card__label">
+          {{ card.label }}
+        </div>
+        <div class="card__value">
+          {{ card.value }}
+        </div>
       </div>
     </div>
 
-    <h3 class="section-title">系统体检（Startup Doctor）</h3>
+    <h3 class="section-title">
+      系统体检（Startup Doctor）
+    </h3>
     <el-alert
       v-if="report"
       :type="report.overall === 'UP' ? 'success' : report.overall === 'DOWN' ? 'error' : 'warning'"
@@ -96,19 +106,57 @@ onMounted(load)
       :closable="false"
       show-icon
     />
-    <el-table v-if="report" :data="report.items" border size="small" class="doctor-table">
-      <el-table-column prop="name" label="依赖" min-width="110" />
-      <el-table-column label="连通性" width="110">
+    <el-table
+      v-if="report"
+      :data="report.items"
+      border
+      size="small"
+      class="doctor-table"
+    >
+      <el-table-column
+        prop="name"
+        label="依赖"
+        min-width="110"
+      />
+      <el-table-column
+        label="连通性"
+        width="110"
+      >
         <template #default="{ row }">
-          <el-tag :type="connectivityTag(row.connectivity)" size="small">{{ row.connectivity }}</el-tag>
+          <el-tag
+            :type="connectivityTag(row.connectivity)"
+            size="small"
+          >
+            {{ row.connectivity }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="mode" label="模式" width="100" />
-      <el-table-column prop="configConclusion" label="配置校验" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="detail" label="说明" min-width="180" show-overflow-tooltip />
+      <el-table-column
+        prop="mode"
+        label="模式"
+        width="100"
+      />
+      <el-table-column
+        prop="configConclusion"
+        label="配置校验"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="detail"
+        label="说明"
+        min-width="180"
+        show-overflow-tooltip
+      />
     </el-table>
 
-    <el-button class="refresh" :loading="loading" @click="load">刷新</el-button>
+    <el-button
+      class="refresh"
+      :loading="loading"
+      @click="load"
+    >
+      刷新
+    </el-button>
   </section>
 </template>
 

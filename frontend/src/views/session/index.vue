@@ -60,36 +60,98 @@ onMounted(load)
   <section>
     <h2>会话监控</h2>
 
-    <el-form class="filters" inline @submit.prevent="search">
+    <el-form
+      class="filters"
+      inline
+      @submit.prevent="search"
+    >
       <el-form-item label="openid">
-        <el-input v-model="filters.openid" placeholder="精确匹配" clearable style="width: 200px" />
+        <el-input
+          v-model="filters.openid"
+          placeholder="精确匹配"
+          clearable
+          style="width: 200px"
+        />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="filters.state" placeholder="全部" clearable style="width: 140px">
-          <el-option v-for="item in STATE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+        <el-select
+          v-model="filters.state"
+          placeholder="全部"
+          clearable
+          style="width: 140px"
+        >
+          <el-option
+            v-for="item in STATE_OPTIONS"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
         </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="search">查询</el-button>
+        <el-button
+          type="primary"
+          @click="search"
+        >
+          查询
+        </el-button>
       </el-form-item>
     </el-form>
 
-    <el-table v-loading="loading" :data="rows" border size="small">
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column label="openid（脱敏）" min-width="150">
-        <template #default="{ row }">{{ maskOpenid(row.openid) }}</template>
+    <el-table
+      v-loading="loading"
+      :data="rows"
+      border
+      size="small"
+    >
+      <el-table-column
+        prop="id"
+        label="ID"
+        width="80"
+      />
+      <el-table-column
+        label="openid（脱敏）"
+        min-width="150"
+      >
+        <template #default="{ row }">
+          {{ maskOpenid(row.openid) }}
+        </template>
       </el-table-column>
-      <el-table-column prop="state" label="状态" width="110" />
-      <el-table-column prop="turnCount" label="轮次" width="90" />
-      <el-table-column prop="contextKey" label="上下文键" min-width="160" show-overflow-tooltip />
-      <el-table-column label="最后活跃" width="170">
+      <el-table-column
+        prop="state"
+        label="状态"
+        width="110"
+      />
+      <el-table-column
+        prop="turnCount"
+        label="轮次"
+        width="90"
+      />
+      <el-table-column
+        prop="contextKey"
+        label="上下文键"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="最后活跃"
+        width="170"
+      >
         <template #default="{ row }">
           {{ row.lastActiveAt ? dayjs(row.lastActiveAt).format('YYYY-MM-DD HH:mm') : '—' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="110" fixed="right">
+      <el-table-column
+        label="操作"
+        width="110"
+        fixed="right"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" @click="router.push({ name: 'session-detail', params: { id: String(row.id) } })">
+          <el-button
+            link
+            type="primary"
+            @click="router.push({ name: 'session-detail', params: { id: String(row.id) } })"
+          >
             消息流
           </el-button>
         </template>

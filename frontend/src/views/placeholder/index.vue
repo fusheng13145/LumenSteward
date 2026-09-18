@@ -13,7 +13,9 @@ const title = computed(() => route.meta.title ?? '功能')
 <template>
   <section>
     <h2>{{ title }}</h2>
-    <p class="hint">该功能将在后续迭代实现（T01 仅提供路由与权限骨架）。</p>
+    <p class="hint">
+      该功能将在后续迭代实现（T01 仅提供路由与权限骨架）。
+    </p>
   </section>
 </template>
 

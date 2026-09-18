@@ -41,22 +41,63 @@ onMounted(load)
       description="MVP 边界：配置为只读展示，写接口仅落库不热更新（切换 Mock/Real 需重启）。SECRET 值仅返回尾号。"
     />
 
-    <el-button class="refresh" :loading="loading" @click="load">刷新</el-button>
+    <el-button
+      class="refresh"
+      :loading="loading"
+      @click="load"
+    >
+      刷新
+    </el-button>
 
-    <el-table :data="configStore.persistedItems" border size="small">
-      <el-table-column prop="configKey" label="键名" min-width="200" />
-      <el-table-column prop="configValue" label="值" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="valueType" label="类型" width="100" />
-      <el-table-column prop="category" label="分类" width="110" />
-      <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
-      <el-table-column label="加密" width="80">
+    <el-table
+      :data="configStore.persistedItems"
+      border
+      size="small"
+    >
+      <el-table-column
+        prop="configKey"
+        label="键名"
+        min-width="200"
+      />
+      <el-table-column
+        prop="configValue"
+        label="值"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="valueType"
+        label="类型"
+        width="100"
+      />
+      <el-table-column
+        prop="category"
+        label="分类"
+        width="110"
+      />
+      <el-table-column
+        prop="description"
+        label="说明"
+        min-width="220"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="加密"
+        width="80"
+      >
         <template #default="{ row }">
-          <el-tag :type="row.encrypted ? 'warning' : 'info'" size="small">
+          <el-tag
+            :type="row.encrypted ? 'warning' : 'info'"
+            size="small"
+          >
             {{ row.encrypted ? '是' : '否' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="更新时间" width="170">
+      <el-table-column
+        label="更新时间"
+        width="170"
+      >
         <template #default="{ row }">
           {{ row.updatedAt ? dayjs(row.updatedAt).format('YYYY-MM-DD HH:mm:ss') : '—' }}
         </template>

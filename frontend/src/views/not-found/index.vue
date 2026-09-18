@@ -8,8 +8,15 @@ const router = useRouter()
 <template>
   <section class="not-found">
     <h2>404 · 页面不存在</h2>
-    <p class="hint">您访问的页面不存在或已被移除。</p>
-    <el-button type="primary" @click="router.replace('/dashboard')">返回概览看板</el-button>
+    <p class="hint">
+      您访问的页面不存在或已被移除。
+    </p>
+    <el-button
+      type="primary"
+      @click="router.replace('/dashboard')"
+    >
+      返回概览看板
+    </el-button>
   </section>
 </template>
 

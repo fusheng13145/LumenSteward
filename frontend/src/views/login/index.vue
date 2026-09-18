@@ -46,11 +46,21 @@ async function onSubmit(): Promise<void> {
 
 <template>
   <div class="login">
-    <form class="login__card" @submit.prevent="onSubmit">
-      <h1 class="login__title">衔光管家 · 管理后台</h1>
+    <form
+      class="login__card"
+      @submit.prevent="onSubmit"
+    >
+      <h1 class="login__title">
+        衔光管家 · 管理后台
+      </h1>
       <label class="login__field">
         <span>用户名</span>
-        <input v-model="form.username" type="text" autocomplete="username" placeholder="请输入用户名" />
+        <input
+          v-model="form.username"
+          type="text"
+          autocomplete="username"
+          placeholder="请输入用户名"
+        >
       </label>
       <label class="login__field">
         <span>密码</span>
@@ -59,9 +69,13 @@ async function onSubmit(): Promise<void> {
           type="password"
           autocomplete="current-password"
           placeholder="请输入密码"
-        />
+        >
       </label>
-      <button class="login__submit" type="submit" :disabled="submitting">
+      <button
+        class="login__submit"
+        type="submit"
+        :disabled="submitting"
+      >
         {{ submitting ? '登录中…' : '登录' }}
       </button>
     </form>

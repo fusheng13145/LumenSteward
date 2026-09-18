@@ -94,43 +94,110 @@ onMounted(load)
   <section>
     <h2>用户管理</h2>
 
-    <el-form class="filters" inline @submit.prevent="search">
+    <el-form
+      class="filters"
+      inline
+      @submit.prevent="search"
+    >
       <el-form-item label="关键字">
-        <el-input v-model="filters.keyword" placeholder="openid / 昵称" clearable style="width: 200px" />
+        <el-input
+          v-model="filters.keyword"
+          placeholder="openid / 昵称"
+          clearable
+          style="width: 200px"
+        />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="filters.status" placeholder="全部" clearable style="width: 120px">
-          <el-option label="正常" :value="1" />
-          <el-option label="禁用" :value="0" />
+        <el-select
+          v-model="filters.status"
+          placeholder="全部"
+          clearable
+          style="width: 120px"
+        >
+          <el-option
+            label="正常"
+            :value="1"
+          />
+          <el-option
+            label="禁用"
+            :value="0"
+          />
         </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="search">查询</el-button>
-        <el-button v-permission="PERMISSIONS.USER_WRITE" @click="exportCsv">导出 CSV</el-button>
+        <el-button
+          type="primary"
+          @click="search"
+        >
+          查询
+        </el-button>
+        <el-button
+          v-permission="PERMISSIONS.USER_WRITE"
+          @click="exportCsv"
+        >
+          导出 CSV
+        </el-button>
       </el-form-item>
     </el-form>
 
-    <el-table v-loading="loading" :data="rows" border size="small">
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column label="openid（脱敏）" min-width="150">
-        <template #default="{ row }">{{ maskOpenid(row.openid) }}</template>
-      </el-table-column>
-      <el-table-column prop="nickname" label="昵称" min-width="120" />
-      <el-table-column label="状态" width="90">
+    <el-table
+      v-loading="loading"
+      :data="rows"
+      border
+      size="small"
+    >
+      <el-table-column
+        prop="id"
+        label="ID"
+        width="80"
+      />
+      <el-table-column
+        label="openid（脱敏）"
+        min-width="150"
+      >
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
+          {{ maskOpenid(row.openid) }}
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="nickname"
+        label="昵称"
+        min-width="120"
+      />
+      <el-table-column
+        label="状态"
+        width="90"
+      >
+        <template #default="{ row }">
+          <el-tag
+            :type="row.status === 1 ? 'success' : 'danger'"
+            size="small"
+          >
             {{ row.status === 1 ? '正常' : '禁用' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="最后交互" width="170">
+      <el-table-column
+        label="最后交互"
+        width="170"
+      >
         <template #default="{ row }">
           {{ row.lastInteractAt ? dayjs(row.lastInteractAt).format('YYYY-MM-DD HH:mm') : '—' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column
+        label="操作"
+        width="180"
+        fixed="right"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row.id)">详情</el-button>
+          <el-button
+            link
+            type="primary"
+            @click="openDetail(row.id)"
+          >
+            详情
+          </el-button>
           <el-button
             v-permission="PERMISSIONS.USER_WRITE"
             link
