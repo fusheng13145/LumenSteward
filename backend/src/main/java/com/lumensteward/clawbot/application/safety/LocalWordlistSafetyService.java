@@ -1,5 +1,7 @@
 package com.lumensteward.clawbot.application.safety;
 
+import com.lumensteward.clawbot.application.config.ConfigKeys;
+import com.lumensteward.clawbot.application.config.DynamicConfigService;
 import com.lumensteward.clawbot.infrastructure.config.properties.SafetyProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,22 +39,35 @@ public class LocalWordlistSafetyService implements ContentSafetyService {
 
     private final SafetyProperties properties;
     private final ResourceLoader resourceLoader;
+    private final DynamicConfigService dynamicConfig;
     private final Set<String> words;
     private final boolean loaded;
 
     /**
-     * 构造器注入（G-14）：内置默认词库路径。
+     * Spring 装配用构造器（G-14）：内置默认词库路径 + 动态配置源。
+     *
+     * @param properties     安全配置
+     * @param resourceLoader 资源加载器
+     * @param dynamicConfig  动态配置源（FR-18：{@code safety.fail-closed} 可在线切换）
+     */
+    @Autowired
+    public LocalWordlistSafetyService(SafetyProperties properties, ResourceLoader resourceLoader,
+                                      DynamicConfigService dynamicConfig) {
+        this(properties, resourceLoader, BUILTIN_WORDLIST, dynamicConfig);
+    }
+
+    /**
+     * 兼容构造：内置默认词库路径，无动态配置源。
      *
      * @param properties     安全配置
      * @param resourceLoader 资源加载器
      */
-    @Autowired
     public LocalWordlistSafetyService(SafetyProperties properties, ResourceLoader resourceLoader) {
-        this(properties, resourceLoader, BUILTIN_WORDLIST);
+        this(properties, resourceLoader, BUILTIN_WORDLIST, null);
     }
 
     /**
-     * 测试友好构造：可指定内置回退词库路径（用于验证 Fail-Closed 路径）。
+     * 测试友好构造：可指定内置回退词库路径（用于验证 Fail-Closed 路径），无动态配置源。
      *
      * @param properties           安全配置
      * @param resourceLoader       资源加载器
@@ -60,8 +75,22 @@ public class LocalWordlistSafetyService implements ContentSafetyService {
      */
     public LocalWordlistSafetyService(SafetyProperties properties, ResourceLoader resourceLoader,
                                       String builtinWordlistPath) {
+        this(properties, resourceLoader, builtinWordlistPath, null);
+    }
+
+    /**
+     * 完整构造（唯一真实入口，其余构造器均委托至此）。
+     *
+     * @param properties          安全配置
+     * @param resourceLoader      资源加载器
+     * @param builtinWordlistPath 内置回退词库路径
+     * @param dynamicConfig       动态配置源（可为 null）
+     */
+    public LocalWordlistSafetyService(SafetyProperties properties, ResourceLoader resourceLoader,
+                                      String builtinWordlistPath, DynamicConfigService dynamicConfig) {
         this.properties = properties;
         this.resourceLoader = resourceLoader;
+        this.dynamicConfig = dynamicConfig;
         LoadResult result = loadWordlist(properties.wordlistPath());
         if (!result.loaded()) {
             result = loadWordlist(builtinWordlistPath);
@@ -93,8 +122,20 @@ public class LocalWordlistSafetyService implements ContentSafetyService {
     }
 
     private SafetyVerdict failClosedOrPass() {
-        // BR-12：默认 Fail-Closed；仅显式关闭时才放行
-        return properties.failClosed() ? SafetyVerdict.unavailable() : SafetyVerdict.pass();
+        // BR-12：默认 Fail-Closed；仅显式关闭时才放行（FR-18：该开关支持在线切换，免重启）
+        return failClosed() ? SafetyVerdict.unavailable() : SafetyVerdict.pass();
+    }
+
+    /**
+     * Fail-Closed 开关（运行时可配置）。
+     *
+     * @return true 表示安全服务不可用时拒绝放行
+     */
+    public boolean failClosed() {
+        if (dynamicConfig == null) {
+            return properties.failClosed();
+        }
+        return dynamicConfig.getBoolean(ConfigKeys.SAFETY_FAIL_CLOSED, properties.failClosed());
     }
 
     private LoadResult loadWordlist(String path) {

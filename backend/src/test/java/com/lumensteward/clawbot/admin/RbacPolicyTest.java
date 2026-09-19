@@ -129,9 +129,16 @@ class RbacPolicyTest {
                 .filter(m -> m.isAnnotationPresent(PutMapping.class)).findFirst().orElseThrow();
         assertThat(expression(configUpdate)).doesNotContain("OPERATOR");
 
+        // 迭代 2 T11：UserController 新增档案维护（PUT /{id}/profile）后，按名定位启停接口，
+        // 避免依赖 getDeclaredMethods 的声明顺序造成误判（断言强度不变）
         Method userStatus = protectedHandlers(UserController.class).stream()
-                .filter(m -> m.isAnnotationPresent(PutMapping.class)).findFirst().orElseThrow();
+                .filter(m -> "updateStatus".equals(m.getName())).findFirst().orElseThrow();
         assertThat(expression(userStatus)).doesNotContain("OPERATOR");
+
+        Method userProfile = protectedHandlers(UserController.class).stream()
+                .filter(m -> "updateProfile".equals(m.getName())).findFirst().orElseThrow();
+        assertThat(expression(userProfile)).as("用户档案维护应授权 OPERATOR（与宠物档案写一致）")
+                .contains("OPERATOR");
 
         List<Method> petWrites = protectedHandlers(PetController.class).stream()
                 .filter(m -> m.isAnnotationPresent(PostMapping.class)

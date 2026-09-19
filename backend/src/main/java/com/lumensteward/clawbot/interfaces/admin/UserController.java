@@ -1,5 +1,6 @@
 package com.lumensteward.clawbot.interfaces.admin;
 
+import com.lumensteward.clawbot.application.admin.UserAdminService;
 import com.lumensteward.clawbot.application.admin.UserQueryService;
 import com.lumensteward.clawbot.common.api.ApiResponse;
 import com.lumensteward.clawbot.common.api.PageResult;
@@ -8,6 +9,7 @@ import com.lumensteward.clawbot.infrastructure.persistence.entity.WxUserEntity;
 import com.lumensteward.clawbot.infrastructure.security.AuthPrincipal;
 import com.lumensteward.clawbot.interfaces.assembler.MaskingAssembler;
 import com.lumensteward.clawbot.interfaces.dto.user.UserDetailVO;
+import com.lumensteward.clawbot.interfaces.dto.user.UserProfileUpdateRequest;
 import com.lumensteward.clawbot.interfaces.dto.user.UserQuery;
 import com.lumensteward.clawbot.interfaces.dto.user.UserVO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,16 +44,21 @@ import java.util.Map;
 public class UserController {
 
     private final UserQueryService userQueryService;
+    private final UserAdminService userAdminService;
     private final MaskingAssembler maskingAssembler;
 
     /**
      * 构造器注入（G-14）。
      *
-     * @param userQueryService 用户查询服务
+     * @param userQueryService 用户查询服务（读）
+     * @param userAdminService 用户写服务（启停 / 档案维护，FR-16 T11）
      * @param maskingAssembler 脱敏装配器
      */
-    public UserController(UserQueryService userQueryService, MaskingAssembler maskingAssembler) {
+    public UserController(UserQueryService userQueryService,
+                          UserAdminService userAdminService,
+                          MaskingAssembler maskingAssembler) {
         this.userQueryService = userQueryService;
+        this.userAdminService = userAdminService;
         this.maskingAssembler = maskingAssembler;
     }
 
@@ -104,8 +111,29 @@ public class UserController {
                                           @AuthenticationPrincipal AuthPrincipal principal,
                                           HttpServletRequest httpRequest) {
         Integer status = body == null ? null : body.get("status");
-        userQueryService.updateStatus(id, status,
+        userAdminService.updateStatus(id, status,
                 principal == null ? null : principal.adminId(), ClientIp.of(httpRequest));
+        return ApiResponse.success();
+    }
+
+    /**
+     * 维护用户档案（昵称，FR-16 AC③ 前后值留痕）。
+     *
+     * @param id        用户主键
+     * @param request   档案更新请求
+     * @param principal 当前主体
+     * @return 空响应
+     */
+    @PutMapping("/{id}/profile")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','OPERATOR')")
+    @Operation(summary = "维护用户档案", description = "昵称维护；变更前后值写入 log_audit")
+    public ApiResponse<Void> updateProfile(@PathVariable Long id,
+                                           @Valid @RequestBody UserProfileUpdateRequest request,
+                                           @AuthenticationPrincipal AuthPrincipal principal,
+                                           HttpServletRequest httpRequest) {
+        userAdminService.updateProfile(id, request == null ? null : request.nickname(),
+                principal == null ? null : principal.adminId(), ClientIp.of(httpRequest),
+                request == null ? null : request.reason());
         return ApiResponse.success();
     }
 

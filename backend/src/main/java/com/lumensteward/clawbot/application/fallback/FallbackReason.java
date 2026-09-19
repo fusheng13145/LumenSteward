@@ -46,6 +46,8 @@ public enum FallbackReason {
     RATE_LIMITED,
     /** 保护：预算超限。 */
     BUDGET_EXCEEDED,
+    /** 保护：用户被禁用（FR-16 AC②：禁用用户不触发 LLM，分发前拦截）。 */
+    USER_DISABLED,
     /** 编排：强制收敛（达最大轮次）。 */
     FORCED_CONVERGENCE,
     /** 业务：宠物昵称重复。 */

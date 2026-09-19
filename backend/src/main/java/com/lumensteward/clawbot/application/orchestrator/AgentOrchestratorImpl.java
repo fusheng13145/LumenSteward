@@ -1,6 +1,8 @@
 package com.lumensteward.clawbot.application.orchestrator;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lumensteward.clawbot.application.config.ConfigKeys;
+import com.lumensteward.clawbot.application.config.DynamicConfigService;
 import com.lumensteward.clawbot.application.context.ContextTrimmer;
 import com.lumensteward.clawbot.application.fallback.FallbackReason;
 import com.lumensteward.clawbot.application.fallback.FallbackService;
@@ -34,12 +36,15 @@ import com.lumensteward.clawbot.infrastructure.observability.TraceContext;
 import com.lumensteward.clawbot.infrastructure.persistence.service.ToolCallLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -79,6 +84,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final ToolCallLogService toolCallLogService;
     private final OrchestrationProperties orchestrationProperties;
     private final LlmProperties llmProperties;
+    private final DynamicConfigService dynamicConfig;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -88,7 +94,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     });
 
     /**
-     * 构造器注入（G-14）。
+     * Spring 装配用构造器（G-14）。
+     *
+     * <p>迭代 2 T10/B-2：追加 {@link DynamicConfigService}，使模型名、轮次上限、工具开关等
+     * 在<b>运行时</b>从 {@code sys_config} 取值，管理后台改值免重启生效（FR-18 AC① / B-2 AC①）。
      *
      * @param llmClient             LLM 客户端
      * @param toolRegistry          工具注册中心
@@ -98,9 +107,11 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param contentSafetyService  内容安全
      * @param fallbackService       兜底文案
      * @param toolCallLogService    工具调用日志（同步）
-     * @param orchestrationProperties 编排配置
-     * @param llmProperties         LLM 配置（模型名与 token 预算）
+     * @param orchestrationProperties 编排配置（静态兜底值）
+     * @param llmProperties         LLM 配置（静态兜底值）
+     * @param dynamicConfig         动态配置源（可为 null，此时行为等同静态配置）
      */
+    @Autowired
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
                                  ContextStore contextStore, ContextTrimmer contextTrimmer,
                                  ConsistencyChecker consistencyChecker,
@@ -108,7 +119,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  FallbackService fallbackService,
                                  ToolCallLogService toolCallLogService,
                                  OrchestrationProperties orchestrationProperties,
-                                 LlmProperties llmProperties) {
+                                 LlmProperties llmProperties,
+                                 DynamicConfigService dynamicConfig) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -119,6 +131,34 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.toolCallLogService = toolCallLogService;
         this.orchestrationProperties = orchestrationProperties;
         this.llmProperties = llmProperties;
+        this.dynamicConfig = dynamicConfig;
+    }
+
+    /**
+     * 兼容构造（无动态配置源）：保留给脱离 Spring 上下文的单元测试，行为等同静态配置。
+     *
+     * @param llmClient             LLM 客户端
+     * @param toolRegistry          工具注册中心
+     * @param contextStore          上下文存储
+     * @param contextTrimmer        上下文裁剪器
+     * @param consistencyChecker    执行一致性校验
+     * @param contentSafetyService  内容安全
+     * @param fallbackService       兜底文案
+     * @param toolCallLogService    工具调用日志（同步）
+     * @param orchestrationProperties 编排配置
+     * @param llmProperties         LLM 配置
+     */
+    public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
+                                 ContextStore contextStore, ContextTrimmer contextTrimmer,
+                                 ConsistencyChecker consistencyChecker,
+                                 ContentSafetyService contentSafetyService,
+                                 FallbackService fallbackService,
+                                 ToolCallLogService toolCallLogService,
+                                 OrchestrationProperties orchestrationProperties,
+                                 LlmProperties llmProperties) {
+        this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
+                contentSafetyService, fallbackService, toolCallLogService,
+                orchestrationProperties, llmProperties, null);
     }
 
     @Override
@@ -131,9 +171,12 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         String traceId = resolveTraceId(request);
         String openid = request.openid();
         Long sessionId = request.sessionId();
-        int maxRounds = Math.max(1, orchestrationProperties.maxRounds());
-        int maxParallel = Math.max(1, orchestrationProperties.maxParallelTools());
-        Duration llmTimeout = Duration.ofSeconds(Math.max(1, llmProperties.timeoutSeconds()));
+        int maxRounds = Math.max(1, dynamicInt(ConfigKeys.ORCHESTRATION_MAX_ROUNDS,
+                orchestrationProperties.maxRounds()));
+        int maxParallel = Math.max(1, dynamicInt(ConfigKeys.ORCHESTRATION_MAX_PARALLEL_TOOLS,
+                orchestrationProperties.maxParallelTools()));
+        Duration llmTimeout = Duration.ofSeconds(Math.max(1,
+                dynamicInt(ConfigKeys.LLM_TIMEOUT_SECONDS, llmProperties.timeoutSeconds())));
 
         List<ToolCallRecord> executed = new ArrayList<>();
         int llmCalls = 0;
@@ -147,15 +190,16 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         }
         List<ChatMessage> history = (request.history() == null || request.history().isEmpty())
                 ? contextStore.load(openid) : request.history();
-        List<ChatMessage> trimmed = contextTrimmer.trim(history, llmProperties.inputBudgetTokens(),
-                llmProperties.reservedOutputTokens());
+        List<ChatMessage> trimmed = contextTrimmer.trim(history,
+                dynamicInt(ConfigKeys.LLM_INPUT_BUDGET_TOKENS, llmProperties.inputBudgetTokens()),
+                dynamicInt(ConfigKeys.LLM_RESERVED_OUTPUT_TOKENS, llmProperties.reservedOutputTokens()));
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(ChatMessage.system(SYSTEM_PROMPT));
         messages.addAll(trimmed);
         messages.add(ChatMessage.user(request.userMessage()));
 
-        List<JsonNode> tools = toolRegistry.enabledSchemas(orchestrationProperties.disabledTools());
+        List<JsonNode> tools = toolRegistry.enabledSchemas(disabledTools());
 
         ChatResult response = null;
         while (round < maxRounds) {
@@ -327,11 +371,11 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         Callable<ToolResult> task = () -> tool.execute(context, args);
         Future<ToolResult> future = toolExecutor.submit(task);
         try {
-            return future.get(orchestrationProperties.toolTimeoutMs(), TimeUnit.MILLISECONDS);
+            return future.get(toolTimeoutMs(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
             log.warn("工具执行超时（SC-03 单工具上限 {}ms）: tool={}",
-                    orchestrationProperties.toolTimeoutMs(), tool.name());
+                    toolTimeoutMs(), tool.name());
             return ToolResult.timeout("工具执行超时");
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
@@ -369,7 +413,57 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     }
 
     private String effectiveModel() {
-        return llmProperties.model();
+        return dynamicString(ConfigKeys.LLM_MODEL, llmProperties.model());
+    }
+
+    /**
+     * 运行时读取整数配置（FR-18 AC①）：动态源缺失或该项未配置时回退启动期静态值。
+     *
+     * @param key      配置键
+     * @param fallback 兜底值
+     * @return 整数值
+     */
+    private int dynamicInt(String key, int fallback) {
+        return dynamicConfig == null ? fallback : dynamicConfig.getInt(key, fallback);
+    }
+
+    /**
+     * 运行时读取字符串配置（B-2 AC①：切换 {@code llm.model} 免重启生效）。
+     *
+     * @param key      配置键
+     * @param fallback 兜底值
+     * @return 字符串值
+     */
+    private String dynamicString(String key, String fallback) {
+        return dynamicConfig == null ? fallback : dynamicConfig.getString(key, fallback);
+    }
+
+    /**
+     * 运行时工具开关（FR-18）：配置值为 JSON 数组或逗号分隔，空则回退静态禁用集合。
+     *
+     * @return 被禁用工具名集合
+     */
+    private Set<String> disabledTools() {
+        Set<String> staticDisabled = orchestrationProperties.disabledTools() == null
+                ? Set.of() : orchestrationProperties.disabledTools();
+        if (dynamicConfig == null) {
+            return staticDisabled;
+        }
+        List<String> configured = dynamicConfig.getList(ConfigKeys.ORCHESTRATION_DISABLED_TOOLS, null);
+        if (configured == null) {
+            return staticDisabled;
+        }
+        return new HashSet<>(configured);
+    }
+
+    /**
+     * 单工具执行超时（ms，SC-03），运行时可配置。
+     *
+     * @return 超时毫秒数
+     */
+    private long toolTimeoutMs() {
+        return dynamicInt(ConfigKeys.ORCHESTRATION_TOOL_TIMEOUT_MS,
+                orchestrationProperties.toolTimeoutMs());
     }
 
     /**

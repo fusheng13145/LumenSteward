@@ -1,5 +1,6 @@
 package com.lumensteward.clawbot.interfaces.admin;
 
+import com.lumensteward.clawbot.application.admin.ConfigAdminService;
 import com.lumensteward.clawbot.application.admin.ConfigQueryService;
 import com.lumensteward.clawbot.common.api.ApiResponse;
 import com.lumensteward.clawbot.infrastructure.config.properties.LlmProperties;
@@ -30,7 +31,8 @@ import java.util.List;
 /**
  * 系统配置控制器（架构 4.3 / SRS 3.3：SUPER_ADMIN 独占）。
  *
- * <p>读展示完整；写仅落库 + 审计，<b>不热更新</b>（MVP 骨架，G-33 如实标注）。
+ * <p><b>迭代 2 T10：</b>写路径改由 {@link ConfigAdminService} 承担——按值类型校验非法值（AC④）、
+ * 落库后失效缓存使配置<b>免重启生效</b>（AC①）；SECRET 出参仅尾号（AC②）、前后值留痕（AC③）。
  * 响应在列表前置 {@code runtime.*} 运行模式项，标识当前 Mock/Real 通道（AC-D3）。
  */
 @RestController
@@ -39,6 +41,7 @@ import java.util.List;
 public class ConfigController {
 
     private final ConfigQueryService configQueryService;
+    private final ConfigAdminService configAdminService;
     private final MaskingAssembler maskingAssembler;
     private final LlmProperties llmProperties;
     private final WechatProperties wechatProperties;
@@ -46,16 +49,19 @@ public class ConfigController {
     /**
      * 构造器注入（G-14）。
      *
-     * @param configQueryService 配置查询服务
+     * @param configQueryService 配置查询服务（读）
+     * @param configAdminService 配置写服务（校验 / 落库 / 热生效 / 审计）
      * @param maskingAssembler   脱敏装配器
      * @param llmProperties      LLM 配置（运行模式标识）
      * @param wechatProperties   微信通道配置（运行模式标识）
      */
     public ConfigController(ConfigQueryService configQueryService,
+                            ConfigAdminService configAdminService,
                             MaskingAssembler maskingAssembler,
                             LlmProperties llmProperties,
                             WechatProperties wechatProperties) {
         this.configQueryService = configQueryService;
+        this.configAdminService = configAdminService;
         this.maskingAssembler = maskingAssembler;
         this.llmProperties = llmProperties;
         this.wechatProperties = wechatProperties;
@@ -92,14 +98,14 @@ public class ConfigController {
      */
     @PutMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "批量更新配置", description = "仅落库 + 审计，热更新标注为未完成")
+    @Operation(summary = "批量更新配置", description = "校验后落库并即时生效（免重启）；非法值被拒（FR-18 AC①④）")
     public ApiResponse<Void> update(@Valid @RequestBody ConfigUpdateRequest request,
                                     @AuthenticationPrincipal AuthPrincipal principal,
                                     HttpServletRequest httpRequest) {
-        List<ConfigQueryService.ConfigItem> items = request.items().stream()
-                .map(item -> new ConfigQueryService.ConfigItem(item.configKey(), item.configValue()))
+        List<ConfigAdminService.ConfigItem> items = request.items().stream()
+                .map(item -> new ConfigAdminService.ConfigItem(item.configKey(), item.configValue()))
                 .toList();
-        configQueryService.update(items, request.reason(),
+        configAdminService.update(items, request.reason(),
                 principal == null ? null : principal.adminId(), ClientIp.of(httpRequest));
         return ApiResponse.success();
     }
@@ -117,7 +123,7 @@ public class ConfigController {
     public ApiResponse<Void> reset(@PathVariable String key,
                                    @AuthenticationPrincipal AuthPrincipal principal,
                                    HttpServletRequest httpRequest) {
-        configQueryService.reset(key, principal == null ? null : principal.adminId(),
+        configAdminService.reset(key, principal == null ? null : principal.adminId(),
                 ClientIp.of(httpRequest));
         return ApiResponse.success();
     }

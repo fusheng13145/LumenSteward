@@ -90,6 +90,11 @@ public class PlanRouteTool implements Tool {
     }
 
     @Override
+    public boolean readOnly() {
+        return true;
+    }
+
+    @Override
     public ToolResult execute(ToolContext context, JsonNode args) {
         long start = System.currentTimeMillis();
         String origin = text(args, "origin");

@@ -1,9 +1,13 @@
 package com.lumensteward.clawbot.application.dispatcher;
 
+import com.lumensteward.clawbot.application.admin.UserStatusGate;
+import com.lumensteward.clawbot.application.fallback.FallbackReason;
+import com.lumensteward.clawbot.application.fallback.FallbackService;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.infrastructure.client.wechat.model.InternalMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -27,14 +31,26 @@ public class MessageDispatcher {
     /** 默认类型（未知类型回落）。 */
     private static final String DEFAULT_TYPE = "text";
 
+    /** 无兜底服务（standalone 构造）时的禁用提示。 */
+    static final String USER_DISABLED_REPLY = "该账号已被禁用，暂时无法使用。";
+
     private final Map<String, MessageHandler> handlers;
+    private final UserStatusGate userStatusGate;
+    private final FallbackService fallbackService;
 
     /**
-     * 构造器注入策略族（G-14 / FR-23 同构的插件化）。
+     * Spring 装配用构造器（G-14 / FR-23 同构的插件化）。
      *
-     * @param handlerList Spring 容器内全部处理器
+     * <p>迭代 2 T11：追加 {@link UserStatusGate}——被禁用用户在<b>分发之前</b>即被拦截，
+     * 从而"不触发 LLM"（FR-16 AC②）。
+     *
+     * @param handlerList      Spring 容器内全部处理器
+     * @param userStatusGate   用户状态闸门（可为 null，兼容独立构造）
+     * @param fallbackService  兜底文案（可为 null）
      */
-    public MessageDispatcher(List<MessageHandler> handlerList) {
+    @Autowired
+    public MessageDispatcher(List<MessageHandler> handlerList, UserStatusGate userStatusGate,
+                             FallbackService fallbackService) {
         Map<String, MessageHandler> map = new LinkedHashMap<>();
         if (handlerList != null) {
             for (MessageHandler handler : handlerList) {
@@ -46,7 +62,18 @@ public class MessageDispatcher {
             }
         }
         this.handlers = Collections.unmodifiableMap(map);
+        this.userStatusGate = userStatusGate;
+        this.fallbackService = fallbackService;
         log.info("MessageDispatcher 初始化完成，已注册类型={}", this.handlers.keySet());
+    }
+
+    /**
+     * 兼容构造（无状态闸门）：保留给脱离 Spring 上下文的单元测试。
+     *
+     * @param handlerList Spring 容器内全部处理器
+     */
+    public MessageDispatcher(List<MessageHandler> handlerList) {
+        this(handlerList, null, null);
     }
 
     /**
@@ -59,6 +86,12 @@ public class MessageDispatcher {
         if (message == null) {
             log.warn("分发空消息，忽略");
             return null;
+        }
+        if (userStatusGate != null && userStatusGate.isBlocked(message.openid())) {
+            log.warn("用户已禁用，拦截（不触发 LLM，FR-16 AC②）: openid={}",
+                    MaskUtils.openid(message.openid()));
+            return fallbackService == null ? USER_DISABLED_REPLY
+                    : fallbackService.render(FallbackReason.USER_DISABLED, Map.of());
         }
         String type = normalize(message.msgType());
         MessageHandler handler = handlers.get(type);

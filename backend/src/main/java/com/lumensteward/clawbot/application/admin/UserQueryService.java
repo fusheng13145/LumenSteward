@@ -6,7 +6,7 @@ import com.lumensteward.clawbot.common.api.PageQuery;
 import com.lumensteward.clawbot.common.api.PageResult;
 import com.lumensteward.clawbot.common.error.ErrorCode;
 import com.lumensteward.clawbot.common.exception.BizException;
-import com.lumensteward.clawbot.common.util.MaskUtils;
+import com.lumensteward.clawbot.infrastructure.persistence.entity.PetProfileEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxSessionEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxUserEntity;
@@ -14,51 +14,42 @@ import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapp
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.WxSessionMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.WxUserMapper;
-import com.lumensteward.clawbot.infrastructure.persistence.entity.PetProfileEntity;
-import com.lumensteward.clawbot.infrastructure.persistence.service.AuditLogService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 用户查询与状态维护（架构 4.3 / SRS FR-16，AC-E9 只读约束由 RBAC 在控制器层施加）。
+ * 用户查询（架构 4.3 / SRS FR-16）。
  *
- * <p>读接口对全部角色开放；写接口（启用/禁用）仅 SUPER_ADMIN，鉴权在 {@code UserController}
- * 的 {@code @PreAuthorize} 完成，本服务仅承载数据访问与审计。
+ * <p>读接口对全部角色开放；<b>写</b>（启用/禁用、档案维护）自迭代 2 T11 起统一收敛到
+ * {@link UserAdminService}，本服务保持只读——与配置侧的读写分离约定一致，避免同一份
+ * 变更逻辑在两处各自演化。
  */
 @Service
 public class UserQueryService {
-
-    private static final Logger log = LoggerFactory.getLogger(UserQueryService.class);
 
     private final WxUserMapper wxUserMapper;
     private final WxSessionMapper wxSessionMapper;
     private final PetProfileMapper petProfileMapper;
     private final ToolCallLogMapper toolCallLogMapper;
-    private final AuditLogService auditLogService;
 
     /**
      * 构造器注入（G-14）。
      *
-     * @param wxUserMapper     用户 Mapper
-     * @param wxSessionMapper  会话 Mapper
-     * @param petProfileMapper 档案 Mapper
+     * @param wxUserMapper      用户 Mapper
+     * @param wxSessionMapper   会话 Mapper
+     * @param petProfileMapper  档案 Mapper
      * @param toolCallLogMapper 工具日志 Mapper
-     * @param auditLogService  审计服务
      */
     public UserQueryService(WxUserMapper wxUserMapper,
                             WxSessionMapper wxSessionMapper,
                             PetProfileMapper petProfileMapper,
-                            ToolCallLogMapper toolCallLogMapper,
-                            AuditLogService auditLogService) {
+                            ToolCallLogMapper toolCallLogMapper) {
         this.wxUserMapper = wxUserMapper;
         this.wxSessionMapper = wxSessionMapper;
         this.petProfileMapper = petProfileMapper;
         this.toolCallLogMapper = toolCallLogMapper;
-        this.auditLogService = auditLogService;
     }
 
     /**
@@ -90,7 +81,7 @@ public class UserQueryService {
      * 按主键查询用户。
      *
      * @param id 主键
-     * @return 用户实体（不存在抛 {@code 50003}）
+     * @return 用户实体（不存在抛 {@code 30005}）
      */
     public WxUserEntity requireById(Long id) {
         WxUserEntity user = wxUserMapper.selectById(id);
@@ -158,30 +149,5 @@ public class UserQueryService {
                 .orderByDesc(WxUserEntity::getLastInteractAt)
                 .last("LIMIT 10000");
         return wxUserMapper.selectList(wrapper);
-    }
-
-    /**
-     * 启用/禁用用户（SUPER_ADMIN，T05 / FR-16）。
-     *
-     * @param id      用户主键
-     * @param status  目标状态：1-启用 0-禁用
-     * @param adminId 操作人
-     * @param ip      来源 IP
-     */
-    public void updateStatus(Long id, Integer status, Long adminId, String ip) {
-        if (status == null || (status != 0 && status != 1)) {
-            throw BizException.of(ErrorCode.PARAM_INVALID, "状态取值非法（0/1）");
-        }
-        WxUserEntity user = requireById(id);
-        Integer before = user.getStatus();
-        user.setStatus(status);
-        wxUserMapper.updateById(user);
-        try {
-            auditLogService.record(adminId, "USER", status == 1 ? "USER_ENABLE" : "USER_DISABLE",
-                    MaskUtils.openid(user.getOpenid()), String.valueOf(before),
-                    String.valueOf(status), null, ip, 1);
-        } catch (RuntimeException e) {
-            log.warn("用户状态变更审计写失败: err={}", e.getMessage());
-        }
     }
 }

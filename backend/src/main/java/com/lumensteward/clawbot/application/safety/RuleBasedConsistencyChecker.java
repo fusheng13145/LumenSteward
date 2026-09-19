@@ -1,11 +1,14 @@
 package com.lumensteward.clawbot.application.safety;
 
+import com.lumensteward.clawbot.application.config.ConfigKeys;
+import com.lumensteward.clawbot.application.config.DynamicConfigService;
 import com.lumensteward.clawbot.application.orchestrator.model.ToolCallRecord;
 import com.lumensteward.clawbot.application.safety.model.ActionClaim;
 import com.lumensteward.clawbot.common.enums.ToolStatus;
 import com.lumensteward.clawbot.infrastructure.config.properties.SafetyProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -31,16 +34,31 @@ public class RuleBasedConsistencyChecker implements ConsistencyChecker {
 
     private final ActionClaimExtractor extractor;
     private final SafetyProperties properties;
+    private final DynamicConfigService dynamicConfig;
 
     /**
-     * 构造器注入（G-14）。
+     * Spring 装配用构造器（G-14）。
+     *
+     * @param extractor     动作声明抽取器
+     * @param properties    安全配置（严格模式静态兜底值）
+     * @param dynamicConfig 动态配置源（可为 null）
+     */
+    @Autowired
+    public RuleBasedConsistencyChecker(ActionClaimExtractor extractor, SafetyProperties properties,
+                                       DynamicConfigService dynamicConfig) {
+        this.extractor = extractor;
+        this.properties = properties;
+        this.dynamicConfig = dynamicConfig;
+    }
+
+    /**
+     * 兼容构造（无动态配置源）：保留给脱离 Spring 上下文的单元测试。
      *
      * @param extractor  动作声明抽取器
      * @param properties 安全配置（严格模式）
      */
     public RuleBasedConsistencyChecker(ActionClaimExtractor extractor, SafetyProperties properties) {
-        this.extractor = extractor;
-        this.properties = properties;
+        this(extractor, properties, null);
     }
 
     @Override
@@ -65,9 +83,12 @@ public class RuleBasedConsistencyChecker implements ConsistencyChecker {
         return ConsistencyVerdict.pass();
     }
 
-    /** 严格模式开关（供编排器决定是否附免责说明）。 */
+    /** 严格模式开关（供编排器决定是否附免责说明）。运行时可配置（FR-18：{@code safety.strict-mode}）。 */
     public boolean strictMode() {
-        return properties.strictMode();
+        if (dynamicConfig == null) {
+            return properties.strictMode();
+        }
+        return dynamicConfig.getBoolean(ConfigKeys.SAFETY_STRICT_MODE, properties.strictMode());
     }
 
     private List<ToolCallRecord> filterSuccess(List<ToolCallRecord> executed) {
