@@ -60,6 +60,15 @@ public final class ConfigKeys {
     /** 微信 Mock 通道开关。 */
     public static final String WX_MOCK_ENABLED = "wx.mock.enabled";
 
+    /** 限流白名单（逗号分隔 openid，豁免限流；FR-20 备选流 2a）。 */
+    public static final String RATE_LIMIT_WHITELIST = "rate_limit.whitelist";
+
+    /** 成本保护日 token 预算（FR-20 成本保护，默认 200000）。 */
+    public static final String RATE_LIMIT_DAILY_TOKEN_BUDGET = "rate_limit.daily_token_budget";
+
+    /** 单条消息最大字符数（FR-20 ④，默认 2000）。 */
+    public static final String RATE_LIMIT_MAX_MESSAGE_LENGTH = "rate_limit.max_message_length";
+
     private ConfigKeys() {
     }
 }

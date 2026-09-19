@@ -16,6 +16,7 @@ import com.lumensteward.clawbot.common.api.PageQuery;
 import com.lumensteward.clawbot.common.api.PageResult;
 import com.lumensteward.clawbot.common.enums.SessionState;
 import com.lumensteward.clawbot.infrastructure.cache.DedupService;
+import com.lumensteward.clawbot.infrastructure.cache.RateLimitDecision;
 import com.lumensteward.clawbot.infrastructure.cache.RateLimitService;
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatMessageParserImpl;
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatReplyBuilderImpl;
@@ -107,7 +108,7 @@ class MainChainWiringVerificationTest {
         DedupService dedup = mock(DedupService.class);
         when(dedup.markIfAbsent(any())).thenReturn(true);
         RateLimitService rateLimit = mock(RateLimitService.class);
-        when(rateLimit.tryAcquire(any(), any())).thenReturn(true);
+        when(rateLimit.tryAcquire(any(), any())).thenReturn(RateLimitDecision.ALLOWED);
 
         WechatCallbackController controller = new WechatCallbackController(verifier, parser, dedup, rateLimit,
                 dispatcher, messageService, new DefaultFallbackService());

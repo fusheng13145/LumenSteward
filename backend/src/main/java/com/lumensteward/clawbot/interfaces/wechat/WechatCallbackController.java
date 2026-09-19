@@ -6,6 +6,7 @@ import com.lumensteward.clawbot.application.fallback.FallbackService;
 import com.lumensteward.clawbot.application.wechat.WechatMessageService;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.infrastructure.cache.DedupService;
+import com.lumensteward.clawbot.infrastructure.cache.RateLimitDecision;
 import com.lumensteward.clawbot.infrastructure.cache.RateLimitService;
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatMessageParser;
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatSignatureVerifier;
@@ -170,8 +171,9 @@ public class WechatCallbackController {
         }
 
         // 限流：保护而非惩罚（BR-29），超限返回如实提示（不暴露内部）
-        if (!rateLimitService.tryAcquire(message.openid(), clientIp(request))) {
-            log.warn("触发限流 openid={}", MaskUtils.openid(message.openid()));
+        RateLimitDecision decision = rateLimitService.tryAcquire(message.openid(), clientIp(request));
+        if (decision != RateLimitDecision.ALLOWED) {
+            log.warn("触发限流 decision={} openid={}", decision, MaskUtils.openid(message.openid()));
             return wechatMessageService.handleInboundWithReceipt(message,
                     fallbackService.render(FallbackReason.RATE_LIMITED, Map.of()));
         }

@@ -153,7 +153,7 @@ class ExecutionLeakScenarioVerificationTest {
         return new AgentOrchestratorImpl(llm, new ToolRegistry(List.of()),
                 new InMemoryContextStore(), new ContextTrimmer(new HeuristicTokenEstimator()),
                 checker, passSafety, new DefaultFallbackService(),
-                new NoOpToolCallLogService(), orchestration, llmProperties);
+                new NoOpToolCallLogService(), orchestration, llmProperties, null, null);
     }
 
     /** 顺序返回预置响应的 LLM 客户端桩。 */

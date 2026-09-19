@@ -2,6 +2,8 @@ package com.lumensteward.clawbot.interfaces.admin;
 
 import com.lumensteward.clawbot.application.admin.UserAdminService;
 import com.lumensteward.clawbot.application.admin.UserQueryService;
+import com.lumensteward.clawbot.application.retention.DeletionScope;
+import com.lumensteward.clawbot.application.retention.UserDataDeletionService;
 import com.lumensteward.clawbot.common.api.ApiResponse;
 import com.lumensteward.clawbot.common.api.PageResult;
 import com.lumensteward.clawbot.common.util.MaskUtils;
@@ -21,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -45,20 +48,24 @@ public class UserController {
 
     private final UserQueryService userQueryService;
     private final UserAdminService userAdminService;
+    private final UserDataDeletionService userDataDeletionService;
     private final MaskingAssembler maskingAssembler;
 
     /**
      * 构造器注入（G-14）。
      *
-     * @param userQueryService 用户查询服务（读）
-     * @param userAdminService 用户写服务（启停 / 档案维护，FR-16 T11）
-     * @param maskingAssembler 脱敏装配器
+     * @param userQueryService        用户查询服务（读）
+     * @param userAdminService        用户写服务（启停 / 档案维护，FR-16 T11）
+     * @param userDataDeletionService 用户数据删除服务（FR-19 ②）
+     * @param maskingAssembler        脱敏装配器
      */
     public UserController(UserQueryService userQueryService,
                           UserAdminService userAdminService,
+                          UserDataDeletionService userDataDeletionService,
                           MaskingAssembler maskingAssembler) {
         this.userQueryService = userQueryService;
         this.userAdminService = userAdminService;
+        this.userDataDeletionService = userDataDeletionService;
         this.maskingAssembler = maskingAssembler;
     }
 
@@ -171,6 +178,41 @@ public class UserController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=users.csv")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
                 .body(payload);
+    }
+
+    /**
+     * 删除用户个人数据（SUPER_ADMIN 独占，FR-19 ②）。
+     *
+     * @param id        用户主键
+     * @param scope     删除范围：all / chat / pet（默认 all）
+     * @param principal 当前主体
+     * @param httpRequest 请求
+     * @return 删除摘要（各表影响行数）
+     */
+    @DeleteMapping("/{id}/data")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "删除用户个人数据", description = "按范围清理 PII 并匿名化；删除留审计，数据库核验无残留")
+    public ApiResponse<UserDataDeletionService.DeletionSummary> deleteData(@PathVariable Long id,
+                                                                          @RequestParam(defaultValue = "all") String scope,
+                                                                          @AuthenticationPrincipal AuthPrincipal principal,
+                                                                          HttpServletRequest httpRequest) {
+        WxUserEntity user = userQueryService.requireById(id);
+        DeletionScope deletionScope = parseScope(scope);
+        UserDataDeletionService.DeletionSummary summary = userDataDeletionService.deleteUserData(
+                user.getOpenid(), principal == null ? null : principal.adminId(),
+                ClientIp.of(httpRequest), deletionScope);
+        return ApiResponse.success(summary);
+    }
+
+    private static DeletionScope parseScope(String scope) {
+        if (scope == null) {
+            return DeletionScope.ALL;
+        }
+        return switch (scope.toLowerCase()) {
+            case "chat" -> DeletionScope.CHAT;
+            case "pet" -> DeletionScope.PET;
+            default -> DeletionScope.ALL;
+        };
     }
 
     private static String csvCell(String value) {

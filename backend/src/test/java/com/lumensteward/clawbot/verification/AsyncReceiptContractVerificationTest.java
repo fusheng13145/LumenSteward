@@ -4,6 +4,7 @@ import com.lumensteward.clawbot.application.dispatcher.MessageDispatcher;
 import com.lumensteward.clawbot.application.fallback.FallbackService;
 import com.lumensteward.clawbot.application.wechat.WechatMessageService;
 import com.lumensteward.clawbot.infrastructure.cache.DedupService;
+import com.lumensteward.clawbot.infrastructure.cache.RateLimitDecision;
 import com.lumensteward.clawbot.infrastructure.cache.RateLimitService;
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatMessageParser;
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatReplyBuilder;
@@ -74,7 +75,7 @@ class AsyncReceiptContractVerificationTest {
                 "msg-async-1", "帮我登记宠物", null, null, null, 0L, Map.of());
         when(parser.parse(any(), any())).thenReturn(inbound);
         when(dedup.markIfAbsent(any())).thenReturn(true);
-        when(rateLimit.tryAcquire(any(), any())).thenReturn(true);
+        when(rateLimit.tryAcquire(any(), any())).thenReturn(RateLimitDecision.ALLOWED);
         // 客服消息推送成功（以便 pushFinal 落 send_status=1）
         when(transport.sendCustomerMessage(any(), any())).thenReturn(SendResult.ok(1L));
         // 模拟"重链路"：分发耗时 8s 后才产出终态文本

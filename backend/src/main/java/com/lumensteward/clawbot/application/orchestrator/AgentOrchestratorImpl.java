@@ -9,6 +9,7 @@ import com.lumensteward.clawbot.application.fallback.FallbackService;
 import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationRequest;
 import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationResult;
 import com.lumensteward.clawbot.application.orchestrator.model.ToolCallRecord;
+import com.lumensteward.clawbot.application.ratelimit.CostBudgetService;
 import com.lumensteward.clawbot.application.safety.ConsistencyChecker;
 import com.lumensteward.clawbot.application.safety.ConsistencyVerdict;
 import com.lumensteward.clawbot.application.safety.ContentSafetyService;
@@ -24,6 +25,7 @@ import com.lumensteward.clawbot.domain.tool.ToolContext;
 import com.lumensteward.clawbot.domain.tool.ToolRegistry;
 import com.lumensteward.clawbot.domain.tool.ToolResult;
 import com.lumensteward.clawbot.domain.tool.ValidationResult;
+import com.lumensteward.clawbot.application.validation.MessageLengthGuard;
 import com.lumensteward.clawbot.infrastructure.client.llm.LlmClient;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ChatMessage;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ChatRequest;
@@ -85,6 +87,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final OrchestrationProperties orchestrationProperties;
     private final LlmProperties llmProperties;
     private final DynamicConfigService dynamicConfig;
+    private final CostBudgetService costBudgetService;
+    private final MessageLengthGuard messageLengthGuard;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -110,6 +114,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param orchestrationProperties 编排配置（静态兜底值）
      * @param llmProperties         LLM 配置（静态兜底值）
      * @param dynamicConfig         动态配置源（可为 null，此时行为等同静态配置）
+     * @param costBudgetService     成本保护预算服务（可为 null）
+     * @param messageLengthGuard    消息长度守卫（可为 null）
      */
     @Autowired
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
@@ -120,7 +126,9 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  ToolCallLogService toolCallLogService,
                                  OrchestrationProperties orchestrationProperties,
                                  LlmProperties llmProperties,
-                                 DynamicConfigService dynamicConfig) {
+                                 DynamicConfigService dynamicConfig,
+                                 CostBudgetService costBudgetService,
+                                 MessageLengthGuard messageLengthGuard) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -132,6 +140,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.orchestrationProperties = orchestrationProperties;
         this.llmProperties = llmProperties;
         this.dynamicConfig = dynamicConfig;
+        this.costBudgetService = costBudgetService;
+        this.messageLengthGuard = messageLengthGuard;
     }
 
     /**
@@ -147,6 +157,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param toolCallLogService    工具调用日志（同步）
      * @param orchestrationProperties 编排配置
      * @param llmProperties         LLM 配置
+     * @param costBudgetService     成本保护预算服务
+     * @param messageLengthGuard    消息长度守卫
      */
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
                                  ContextStore contextStore, ContextTrimmer contextTrimmer,
@@ -155,10 +167,12 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  FallbackService fallbackService,
                                  ToolCallLogService toolCallLogService,
                                  OrchestrationProperties orchestrationProperties,
-                                 LlmProperties llmProperties) {
+                                 LlmProperties llmProperties,
+                                 CostBudgetService costBudgetService,
+                                 MessageLengthGuard messageLengthGuard) {
         this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
                 contentSafetyService, fallbackService, toolCallLogService,
-                orchestrationProperties, llmProperties, null);
+                orchestrationProperties, llmProperties, null, costBudgetService, messageLengthGuard);
     }
 
     @Override
@@ -167,6 +181,23 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             String text = fallbackService.render(FallbackReason.INVALID_ARGS, Map.of());
             return new OrchestrationResult(text, SessionState.IDLE, List.of(),
                     FallbackReason.INVALID_ARGS.name(), 0, 0);
+        }
+        // 成本预算耗尽降级（FR-20 ③）：不再调用 LLM，直接返回基础回复
+        if (costBudgetService != null && costBudgetService.isDegraded()) {
+            String text = "今天的使用额度已用完啦，明天零点会重新开放，先和你道个晚安～";
+            log.info("成本预算耗尽，进入基础回复降级 openid={}", MaskUtils.openid(request.openid()));
+            return new OrchestrationResult(text, SessionState.DEGRADED, List.of(),
+                    "COST_BUDGET", 0, 0);
+        }
+        // 单条消息长度守卫（FR-20 ④）
+        String userMessage = request.userMessage();
+        if (messageLengthGuard != null) {
+            var guard = messageLengthGuard.guard(userMessage);
+            if (guard.truncated()) {
+                log.warn("消息超长已截断 openid={} originalLen={}", MaskUtils.openid(request.openid()),
+                        guard.originalLength());
+            }
+            userMessage = guard.text();
         }
         String traceId = resolveTraceId(request);
         String openid = request.openid();
@@ -197,7 +228,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(ChatMessage.system(SYSTEM_PROMPT));
         messages.addAll(trimmed);
-        messages.add(ChatMessage.user(request.userMessage()));
+        messages.add(ChatMessage.user(userMessage));
 
         List<JsonNode> tools = toolRegistry.enabledSchemas(disabledTools());
 
@@ -205,6 +236,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         while (round < maxRounds) {
             try {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
+                recordUsage(response);
                 llmCalls++;
             } catch (LlmException e) {
                 FallbackReason reason = mapLlmReason(e);
@@ -240,6 +272,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             messages.add(ChatMessage.system("请基于已有信息给出回复，并说明信息可能不完整。"));
             try {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
+                recordUsage(response);
                 llmCalls++;
             } catch (LlmException e) {
                 log.warn("强制收敛调用失败: errType={}", e.errorType());
@@ -275,7 +308,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         }
 
         // 写回上下文（best-effort）
-        contextStore.appendAll(openid, List.of(ChatMessage.user(request.userMessage()),
+        contextStore.appendAll(openid, List.of(ChatMessage.user(userMessage),
                 ChatMessage.assistant(reply)));
 
         log.info("编排完成 openid={} rounds={} llmCalls={} tools={}",
@@ -414,6 +447,18 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
     private String effectiveModel() {
         return dynamicString(ConfigKeys.LLM_MODEL, llmProperties.model());
+    }
+
+    /**
+     * 记录本次 LLM 调用的 token 消耗（FR-20 ③ 成本保护）。
+     *
+     * @param response 对话结果（可空）
+     */
+    private void recordUsage(ChatResult response) {
+        if (costBudgetService == null || response == null || response.usage() == null) {
+            return;
+        }
+        costBudgetService.recordLlmCall(response.usage().totalTokens());
     }
 
     /**

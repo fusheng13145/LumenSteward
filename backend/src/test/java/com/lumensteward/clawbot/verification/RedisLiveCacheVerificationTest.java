@@ -1,5 +1,6 @@
 package com.lumensteward.clawbot.verification;
 
+import com.lumensteward.clawbot.infrastructure.cache.RateLimitDecision;
 import com.lumensteward.clawbot.infrastructure.cache.RedisDedupService;
 import com.lumensteward.clawbot.infrastructure.cache.RedisRateLimitService;
 import com.lumensteward.clawbot.infrastructure.config.properties.WechatProperties;
@@ -18,7 +19,7 @@ import java.net.Socket;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 独立验证（实跑）：Redis 幂等去重与限流（SRS 9.4.6 / AC-A3 / BR-29）。
+ * 独立验证（实跑）：Redis 幂等去重与限流（SRS 9.4.6 / AC-A3 / BR-29 / FR-20）。
  *
  * <p>本机 Redis 7 可用（无口令），故以<b>真实 Redis</b> 实跑，取得端到端实证。
  * 标注 {@code @Tag("redis-live")}；Redis 不可达时由 {@code assumeTrue} 自动跳过（保证可移植），
@@ -76,32 +77,36 @@ class RedisLiveCacheVerificationTest {
     }
 
     @Test
-    @DisplayName("BR-29：单用户每分钟窗口第 61 次超限（前 60 次允许）")
-    void rateLimitBlocksAfterSixty() {
-        RedisRateLimitService rateLimit = new RedisRateLimitService(template);
+    @DisplayName("FR-20/BR-29：单用户每分钟窗口第 21 次超限（前 20 次允许，USER_FREQ）")
+    void rateLimitBlocksAfterTwenty() {
+        RedisRateLimitService rateLimit = new RedisRateLimitService(template, null, null);
         String openid = "QA-RL-" + System.nanoTime();
-        template.delete(RedisRateLimitService.USER_KEY_PREFIX + openid);
+        template.delete(RedisRateLimitService.USER_MINUTE_PREFIX + openid);
+        template.delete(RedisRateLimitService.USER_HOUR_PREFIX + openid);
 
         int allowed = 0;
-        for (int i = 0; i < 61; i++) {
-            if (rateLimit.tryAcquire(openid, null)) {
+        for (int i = 0; i < 21; i++) {
+            if (rateLimit.tryAcquire(openid, null) == RateLimitDecision.ALLOWED) {
                 allowed++;
             }
         }
 
-        assertThat(allowed).as("前 60 次允许、第 61 次拒绝").isEqualTo(60);
-        template.delete(RedisRateLimitService.USER_KEY_PREFIX + openid);
+        assertThat(allowed).as("前 20 次允许、第 21 次拒绝（USER_FREQ）").isEqualTo(20);
+        template.delete(RedisRateLimitService.USER_MINUTE_PREFIX + openid);
+        template.delete(RedisRateLimitService.USER_HOUR_PREFIX + openid);
     }
 
     @Test
-    @DisplayName("BR-29：Redis 不可用（阈值不可达）时应 Fail-Open —— 由实现保证，此处仅确认正常路径不抛异常")
+    @DisplayName("BR-29：正常路径不抛异常且放行")
     void normalPathDoesNotThrow() {
-        RedisRateLimitService rateLimit = new RedisRateLimitService(template);
+        RedisRateLimitService rateLimit = new RedisRateLimitService(template, null, null);
         String openid = "QA-RL-OK-" + System.nanoTime();
-        template.delete(RedisRateLimitService.USER_KEY_PREFIX + openid);
+        template.delete(RedisRateLimitService.USER_MINUTE_PREFIX + openid);
+        template.delete(RedisRateLimitService.USER_HOUR_PREFIX + openid);
 
-        assertThat(rateLimit.tryAcquire(openid, "127.0.0.1")).isTrue();
-        template.delete(RedisRateLimitService.USER_KEY_PREFIX + openid);
-        template.delete(RedisRateLimitService.IP_KEY_PREFIX + "127.0.0.1");
+        assertThat(rateLimit.tryAcquire(openid, "127.0.0.1")).isEqualTo(RateLimitDecision.ALLOWED);
+        template.delete(RedisRateLimitService.USER_MINUTE_PREFIX + openid);
+        template.delete(RedisRateLimitService.USER_HOUR_PREFIX + openid);
+        template.delete(RedisRateLimitService.IP_PREFIX + "127.0.0.1");
     }
 }

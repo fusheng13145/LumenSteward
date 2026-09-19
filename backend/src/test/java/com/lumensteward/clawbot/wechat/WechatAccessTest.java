@@ -13,6 +13,7 @@ import com.lumensteward.clawbot.common.api.PageResult;
 import com.lumensteward.clawbot.common.exception.SignatureInvalidException;
 import com.lumensteward.clawbot.common.exception.TimestampOutOfWindowException;
 import com.lumensteward.clawbot.infrastructure.cache.DedupService;
+import com.lumensteward.clawbot.infrastructure.cache.RateLimitDecision;
 import com.lumensteward.clawbot.infrastructure.cache.RateLimitService;
 import com.lumensteward.clawbot.infrastructure.client.wechat.MockWechatTransport;
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatMessageParserImpl;
@@ -220,8 +221,8 @@ class WechatAccessTest {
     /** 放行限流。 */
     static class AllowAllRateLimit implements RateLimitService {
         @Override
-        public boolean tryAcquire(String openid, String ip) {
-            return true;
+        public RateLimitDecision tryAcquire(String openid, String ip) {
+            return RateLimitDecision.ALLOWED;
         }
     }
 

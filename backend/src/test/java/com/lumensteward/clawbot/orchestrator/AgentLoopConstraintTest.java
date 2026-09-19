@@ -109,7 +109,7 @@ class AgentLoopConstraintTest {
         return new AgentOrchestratorImpl(llm, new ToolRegistry(List.of(tool)),
                 new InMemoryContextStore(), new ContextTrimmer(new HeuristicTokenEstimator()),
                 PASS_CHECKER, PASS_SAFETY, new DefaultFallbackService(),
-                new NoOpToolCallLogService(), orchestration, llmProperties);
+                new NoOpToolCallLogService(), orchestration, llmProperties, null, null);
     }
 
     private static ChatResult toolCallResult() {
