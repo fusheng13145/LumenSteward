@@ -47,3 +47,11 @@ export interface UserStatusRequest {
   /** 目标状态：1-启用 0-禁用 */
   status: number
 }
+
+/** 用户档案维护请求体（FR-16 / 迭代 2 T11：PUT /api/users/{id}/profile） */
+export interface UserProfileUpdateRequest {
+  /** 昵称（置空表示清空，上限 64） */
+  nickname: string | null
+  /** 变更原因（可空，建议填写以便审计追溯） */
+  reason: string | null
+}

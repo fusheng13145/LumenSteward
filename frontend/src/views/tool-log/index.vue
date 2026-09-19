@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
+import { PERMISSIONS } from '@/config/permissions'
 import { toolLogApi } from '@/services/toolLog.api'
 import { useToastStore } from '@/stores/toast'
 import type { ToolLogDetailVO, ToolLogVO, ToolStatsVO } from '@/types/toolLog'
@@ -14,6 +16,7 @@ import { maskOpenid } from '@/utils/mask'
  * 顶部统计来自 `/api/tool-logs/stats`（COUNT/AVG 聚合，非估算）。
  */
 const toast = useToastStore()
+const router = useRouter()
 
 const filters = reactive<{
   traceId: string
@@ -124,6 +127,18 @@ function search(): void {
   void Promise.all([load(), loadStats()])
 }
 
+/**
+ * 跳转回放调试台（A-2 T12）。
+ *
+ * @param traceId 链路标识；为空则不带参数（由回放页手工填写）
+ */
+function openReplay(traceId?: string): void {
+  void router.push({
+    name: 'tool-log-replay',
+    query: traceId ? { traceId } : {},
+  })
+}
+
 async function openDetail(row: ToolLogVO): Promise<void> {
   try {
     detail.value = await toolLogApi.detail(row.id)
@@ -217,6 +232,14 @@ onMounted(() => {
           查询
         </el-button>
       </el-form-item>
+      <el-form-item>
+        <el-button
+          v-permission="PERMISSIONS.TOOL_LOG_REPLAY"
+          @click="openReplay(filters.traceId || undefined)"
+        >
+          回放调试台
+        </el-button>
+      </el-form-item>
     </el-form>
 
     <el-table
@@ -288,7 +311,7 @@ onMounted(() => {
       </el-table-column>
       <el-table-column
         label="操作"
-        width="90"
+        width="150"
         fixed="right"
       >
         <template #default="{ row }">
@@ -298,6 +321,14 @@ onMounted(() => {
             @click="openDetail(row)"
           >
             详情
+          </el-button>
+          <el-button
+            v-permission="PERMISSIONS.TOOL_LOG_REPLAY"
+            link
+            type="primary"
+            @click="openReplay(row.traceId)"
+          >
+            回放
           </el-button>
         </template>
       </el-table-column>

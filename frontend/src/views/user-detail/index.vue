@@ -26,6 +26,14 @@ const loading = ref(false)
 
 const dialogVisible = ref(false)
 const editing = ref<PetVO | null>(null)
+
+/** 用户档案维护（昵称，FR-16 T11） */
+const profileVisible = ref(false)
+const profileSubmitting = ref(false)
+const profileForm = reactive<{ nickname: string; reason: string }>({
+  nickname: '',
+  reason: '',
+})
 const form = reactive<PetCreateRequest>({
   petName: '',
   petType: undefined,
@@ -121,6 +129,32 @@ async function remove(pet: PetVO): Promise<void> {
   }
 }
 
+/**
+ * 打开用户档案维护（FR-16 / 迭代 2 T11：昵称维护，前后值留痕）。
+ */
+function openProfile(): void {
+  profileForm.nickname = detail.value?.nickname ?? ''
+  profileForm.reason = ''
+  profileVisible.value = true
+}
+
+async function submitProfile(): Promise<void> {
+  profileSubmitting.value = true
+  try {
+    await userApi.updateProfile(userId, {
+      nickname: profileForm.nickname.trim() === '' ? null : profileForm.nickname.trim(),
+      reason: profileForm.reason.trim() === '' ? null : profileForm.reason.trim(),
+    })
+    toast.success('用户信息已更新（变更已留痕）')
+    profileVisible.value = false
+    await load()
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '保存失败')
+  } finally {
+    profileSubmitting.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -163,6 +197,15 @@ onMounted(load)
         {{ detail.lastInteractAt ? dayjs(detail.lastInteractAt).format('YYYY-MM-DD HH:mm') : '—' }}
       </el-descriptions-item>
     </el-descriptions>
+
+    <div class="user-actions">
+      <el-button
+        v-permission="PERMISSIONS.PROFILE_WRITE"
+        @click="openProfile"
+      >
+        维护用户信息
+      </el-button>
+    </div>
 
     <div class="toolbar">
       <h3>宠物档案</h3>
@@ -241,6 +284,42 @@ onMounted(load)
         </template>
       </el-table-column>
     </el-table>
+
+    <el-dialog
+      v-model="profileVisible"
+      title="维护用户信息"
+      width="440px"
+    >
+      <el-form label-width="80px">
+        <el-form-item label="昵称">
+          <el-input
+            v-model="profileForm.nickname"
+            maxlength="64"
+            placeholder="留空表示清空昵称"
+          />
+        </el-form-item>
+        <el-form-item label="变更原因">
+          <el-input
+            v-model="profileForm.reason"
+            type="textarea"
+            :rows="2"
+            placeholder="可选，建议填写以便审计追溯"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="profileVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="profileSubmitting"
+          @click="submitProfile"
+        >
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog
       v-model="dialogVisible"
@@ -344,5 +423,9 @@ onMounted(load)
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.user-actions {
+  margin-bottom: 12px;
 }
 </style>

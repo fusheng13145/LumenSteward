@@ -1,6 +1,6 @@
 import { request } from '@/utils/api'
 import type { PageResult } from '@/types/api'
-import type { UserDetailVO, UserQuery, UserStatusRequest, UserVO } from '@/types/user'
+import type { UserDetailVO, UserProfileUpdateRequest, UserQuery, UserStatusRequest, UserVO } from '@/types/user'
 import { STORAGE_KEYS } from '@/utils/constants'
 
 /**
@@ -22,6 +22,15 @@ export const userApi = {
   /** 启用/禁用用户（PUT /api/users/{id}/status，SUPER_ADMIN） */
   updateStatus(id: number, payload: UserStatusRequest): Promise<null> {
     return request<null>({ url: `/users/${id}/status`, method: 'put', data: payload })
+  },
+
+  /**
+   * 维护用户档案（PUT /api/users/{id}/profile，SUPER_ADMIN/OPERATOR）。
+   *
+   * 迭代 2 T11：变更前后值写入 log_audit（FR-16 AC③）。
+   */
+  updateProfile(id: number, payload: UserProfileUpdateRequest): Promise<null> {
+    return request<null>({ url: `/users/${id}/profile`, method: 'put', data: payload })
   },
 
   /**

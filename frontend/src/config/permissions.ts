@@ -21,6 +21,8 @@ export const PERMISSIONS = {
   SESSION_VIEW: 'session:view',
   /** 工具调用日志查看 */
   TOOL_LOG_VIEW: 'toolLog:view',
+  /** 工具调用回放（A-2；SUPER_ADMIN/OPERATOR，AUDITOR 不可） */
+  TOOL_LOG_REPLAY: 'toolLog:replay',
   /** 系统配置查看（SUPER_ADMIN 独占） */
   CONFIG_VIEW: 'config:view',
   /** 系统配置写入（SUPER_ADMIN 独占） */
@@ -47,6 +49,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.PROFILE_WRITE,
     PERMISSIONS.SESSION_VIEW,
     PERMISSIONS.TOOL_LOG_VIEW,
+    PERMISSIONS.TOOL_LOG_REPLAY,
     PERMISSIONS.DOCTOR_VIEW,
   ],
   // 审计员：日志与统计只读；不可修改任何业务数据

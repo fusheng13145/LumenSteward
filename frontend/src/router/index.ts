@@ -58,6 +58,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '工具调用日志', requiresAuth: true, requiredPermission: 'toolLog:view' },
       },
       {
+        path: 'tool-logs/replay',
+        name: 'tool-log-replay',
+        component: () => import('@/views/tool-log/replay.vue'),
+        meta: { title: '工具调用回放', requiresAuth: true, requiredPermission: 'toolLog:replay' },
+      },
+      {
         path: 'configs',
         name: 'configs',
         component: () => import('@/views/config/index.vue'),

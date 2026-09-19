@@ -130,6 +130,21 @@ export const TOOL_STATUS_LABELS: Record<number, string> = {
   4: '未执行',
 }
 
+// ===== 回放状态名（A-2 迭代 2 T12：与后端 ToolStatus 枚举名同源） =====
+export const REPLAY_STATUS_LABELS: Record<string, string> = {
+  SUCCESS: '成功',
+  FAILED: '失败',
+  DEGRADED: '降级',
+  TIMEOUT: '超时',
+  NOT_EXECUTED: '未执行',
+}
+
+/** 回放跳过原因中文名（A-2 T12） */
+export const REPLAY_SKIP_REASON_LABELS: Record<string, string> = {
+  TOOL_NOT_FOUND: '工具未注册（已下线）',
+  NOT_READ_ONLY: '非只读工具，干跑模式跳过',
+}
+
 // ===== 会话状态（对齐 wx_session.state COMMENT，与后端 SessionState 同源） =====
 export const SESSION_STATE = {
   /** 空闲 */
