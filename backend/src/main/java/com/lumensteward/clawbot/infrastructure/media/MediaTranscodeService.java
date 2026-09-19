@@ -3,6 +3,7 @@ package com.lumensteward.clawbot.infrastructure.media;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -35,8 +36,12 @@ public class MediaTranscodeService {
     /**
      * 生产构造：ffmpeg 路径来自配置 {@code media.ffmpeg-path}（默认 {@code ffmpeg}）。
      *
+     * <p>本类存在两个构造器，Spring 装配时<b>必须</b>显式标注 {@code @Autowired} 指定入口，
+     * 否则容器按"无参优先"策略查找而失败（D8：单测全绿但应用无法启动的典型静默缺陷）。
+     *
      * @param ffmpegPath ffmpeg 可执行文件路径或命令名
      */
+    @Autowired
     public MediaTranscodeService(@Value("${media.ffmpeg-path:ffmpeg}") String ffmpegPath) {
         this(ffmpegPath, ProcessBuilder::start);
     }
