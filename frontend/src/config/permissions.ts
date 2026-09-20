@@ -31,6 +31,8 @@ export const PERMISSIONS = {
   AUDIT_VIEW: 'audit:view',
   /** 系统自检报告查看 */
   DOCTOR_VIEW: 'doctor:view',
+  /** 实时观测台查看（FR-08 / 迭代 3 Wave 2 T3） */
+  MONITOR_VIEW: 'monitor:view',
 } as const
 
 /** 权限码字面量联合类型 */
@@ -50,6 +52,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.SESSION_VIEW,
     PERMISSIONS.TOOL_LOG_VIEW,
     PERMISSIONS.TOOL_LOG_REPLAY,
+    PERMISSIONS.MONITOR_VIEW,
     PERMISSIONS.DOCTOR_VIEW,
   ],
   // 审计员：日志与统计只读；不可修改任何业务数据
@@ -59,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.SESSION_VIEW,
     PERMISSIONS.TOOL_LOG_VIEW,
     PERMISSIONS.AUDIT_VIEW,
+    PERMISSIONS.MONITOR_VIEW,
     PERMISSIONS.DOCTOR_VIEW,
   ],
 }
@@ -71,6 +75,7 @@ export const MENU_PERMISSIONS: Record<string, PermissionCode> = {
   'tool-logs': PERMISSIONS.TOOL_LOG_VIEW,
   configs: PERMISSIONS.CONFIG_VIEW,
   'audit-logs': PERMISSIONS.AUDIT_VIEW,
+  monitor: PERMISSIONS.MONITOR_VIEW,
 }
 
 /**

@@ -8,6 +8,8 @@ import com.lumensteward.clawbot.application.fallback.FallbackReason;
 import com.lumensteward.clawbot.application.fallback.FallbackService;
 import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationRequest;
 import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationResult;
+import com.lumensteward.clawbot.application.console.ConsoleEvent;
+import com.lumensteward.clawbot.application.console.ConsoleEventType;
 import com.lumensteward.clawbot.application.orchestrator.model.ToolCallRecord;
 import com.lumensteward.clawbot.application.ratelimit.CostBudgetService;
 import com.lumensteward.clawbot.application.safety.ConsistencyChecker;
@@ -39,6 +41,7 @@ import com.lumensteward.clawbot.infrastructure.persistence.service.ToolCallLogSe
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -89,6 +92,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final DynamicConfigService dynamicConfig;
     private final CostBudgetService costBudgetService;
     private final MessageLengthGuard messageLengthGuard;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -128,7 +132,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  LlmProperties llmProperties,
                                  DynamicConfigService dynamicConfig,
                                  CostBudgetService costBudgetService,
-                                 MessageLengthGuard messageLengthGuard) {
+                                 MessageLengthGuard messageLengthGuard,
+                                 ApplicationEventPublisher eventPublisher) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -142,6 +147,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.dynamicConfig = dynamicConfig;
         this.costBudgetService = costBudgetService;
         this.messageLengthGuard = messageLengthGuard;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -172,7 +178,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  MessageLengthGuard messageLengthGuard) {
         this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
                 contentSafetyService, fallbackService, toolCallLogService,
-                orchestrationProperties, llmProperties, null, costBudgetService, messageLengthGuard);
+                orchestrationProperties, llmProperties, null, costBudgetService, messageLengthGuard,
+                null);
     }
 
     @Override
@@ -186,6 +193,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         if (costBudgetService != null && costBudgetService.isDegraded()) {
             String text = "今天的使用额度已用完啦，明天零点会重新开放，先和你道个晚安～";
             log.info("成本预算耗尽，进入基础回复降级 openid={}", MaskUtils.openid(request.openid()));
+            publishConsole(ConsoleEventType.MESSAGE_DELTA, request.traceId(), request.openid(),
+                    request.sessionId(), 0, null, null, text);
+            publishConsole(ConsoleEventType.DONE, request.traceId(), request.openid(),
+                    request.sessionId(), 0, null, null, null);
             return new OrchestrationResult(text, SessionState.DEGRADED, List.of(),
                     "COST_BUDGET", 0, 0);
         }
@@ -313,6 +324,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
         log.info("编排完成 openid={} rounds={} llmCalls={} tools={}",
                 MaskUtils.openid(openid), round, llmCalls, executed.size());
+        publishConsole(ConsoleEventType.MESSAGE_DELTA, traceId, openid, sessionId, round, null, null, reply);
+        publishConsole(ConsoleEventType.DONE, traceId, openid, sessionId, round, null, null, null);
         return new OrchestrationResult(reply, SessionState.TASKING, executed, null, llmCalls, round);
     }
 
@@ -373,12 +386,15 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
         // 执行（同步日志：logStart → execute → logEnd，ADR-003）
         ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round, callSeq);
+        publishConsole(ConsoleEventType.TOOL_START, traceId, openid, sessionId, round, name, callSeq, null);
         long start = System.currentTimeMillis();
         ToolResult result = executeWithTimeout(tool, traceId, openid, sessionId, round, args);
         long latency = System.currentTimeMillis() - start;
         ToolResult timed = new ToolResult(result.status(), result.errorType(), result.message(),
                 result.data(), result.retryable(), latency);
         toolCallLogService.logEnd(record, timed);
+        publishConsole(ConsoleEventType.TOOL_END, traceId, openid, sessionId, round, name, callSeq,
+                JsonUtils.toJson(java.util.Map.of("status", timed.status().name(), "latencyMs", timed.latencyMs())));
         executed.add(record.withOutcome(timed, latency));
 
         // SC-05：关键工具失败/超时中断依赖链
@@ -394,7 +410,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private void recordNotExecuted(ToolCall call, int round, int callSeq, String traceId, String openid,
                                    Long sessionId, List<ToolCallRecord> executed, ToolResult result) {
         ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round, callSeq);
+        publishConsole(ConsoleEventType.TOOL_START, traceId, openid, sessionId, round, call.functionName(), callSeq, null);
         toolCallLogService.logEnd(record, result);
+        publishConsole(ConsoleEventType.TOOL_END, traceId, openid, sessionId, round, call.functionName(), callSeq,
+                JsonUtils.toJson(java.util.Map.of("status", result.status().name())));
         executed.add(record.withOutcome(result, 0L));
     }
 
@@ -443,6 +462,34 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             }
         }
         return false;
+    }
+
+    /**
+     * 发布控制台观测事件（FR-08 T3）。
+     *
+     * <p>经 {@code ApplicationEventPublisher} 解耦到 SSE 缓冲；{@code eventPublisher} 为 null 时
+     * （脱离 Spring 的测试构造路径）静默跳过。异常被吞掉并记告警，避免观测副作用影响主链路。
+     *
+     * @param type       事件类型
+     * @param traceId    链路标识
+     * @param openid     用户标识（内部脱敏）
+     * @param sessionId  会话 id（可空）
+     * @param round      Agent Loop 轮次（可空）
+     * @param toolName   工具名（可空）
+     * @param callSeq    链路内调用序号（可空）
+     * @param payload    可选载荷 JSON（可空）
+     */
+    private void publishConsole(ConsoleEventType type, String traceId, String openid, Long sessionId,
+                                Integer round, String toolName, Integer callSeq, String payload) {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(
+                    new ConsoleEvent(type, traceId, openid, sessionId, round, toolName, callSeq, payload));
+        } catch (Exception e) {
+            log.warn("发布 ConsoleEvent 失败 type={} traceId={}", type, traceId);
+        }
     }
 
     private String effectiveModel() {
@@ -540,6 +587,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                 || reason == FallbackReason.LLM_INVALID_OUTPUT)
                 ? SessionState.DEGRADED : SessionState.IDLE;
         log.info("编排降级 reason={} llmCalls={} rounds={}", reason, llmCalls, rounds);
+        publishConsole(ConsoleEventType.MESSAGE_DELTA, request.traceId(), request.openid(),
+                request.sessionId(), rounds, null, null, text);
+        publishConsole(ConsoleEventType.DONE, request.traceId(), request.openid(),
+                request.sessionId(), rounds, null, null, null);
         return new OrchestrationResult(text, state, executed, reason.name(), llmCalls, rounds);
     }
 

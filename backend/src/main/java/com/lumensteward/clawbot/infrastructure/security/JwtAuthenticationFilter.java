@@ -37,6 +37,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String HEADER = "Authorization";
     private static final String PREFIX = "Bearer ";
+    /** SSE 等无法设置请求头场景的令牌回落查询参数（绝不写入日志，BR-11/脱敏纪律）。 */
+    private static final String PARAM_TOKEN = "token";
 
     private final JwtTokenProvider jwtTokenProvider;
     private final TokenBlacklistService tokenBlacklistService;
@@ -62,6 +64,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith(PREFIX)
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             authenticate(request, header.substring(PREFIX.length()).trim());
+        } else if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            // 回落：从查询参数 ?token=<jwt> 取令牌（SSE 等无法设置请求头的场景）。
+            // 复用同一解析与黑名单校验；令牌仅透传给解析器，绝不写入日志。
+            String queryToken = request.getParameter(PARAM_TOKEN);
+            if (queryToken != null && !queryToken.isBlank()) {
+                authenticate(request, queryToken.trim());
+            }
         }
         filterChain.doFilter(request, response);
     }

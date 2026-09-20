@@ -182,7 +182,7 @@ class RuntimeConfigSwitchTest {
         return new AgentOrchestratorImpl(llm, registry, contextStore,
                 new ContextTrimmer(new com.lumensteward.clawbot.application.context.HeuristicTokenEstimator()),
                 checker, safety, new DefaultFallbackService(config), toolCallLogService,
-                ORCHESTRATION, LLM, config, null, null);
+                ORCHESTRATION, LLM, config, null, null, null);
     }
 
     private ChatRequest capturedRequest() {
