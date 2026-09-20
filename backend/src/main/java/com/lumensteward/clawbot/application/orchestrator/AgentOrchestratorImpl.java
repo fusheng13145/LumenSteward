@@ -37,6 +37,7 @@ import com.lumensteward.clawbot.infrastructure.client.llm.exception.LlmException
 import com.lumensteward.clawbot.infrastructure.config.properties.LlmProperties;
 import com.lumensteward.clawbot.infrastructure.config.properties.OrchestrationProperties;
 import com.lumensteward.clawbot.infrastructure.observability.TraceContext;
+import com.lumensteward.clawbot.infrastructure.persistence.service.AuditLogService;
 import com.lumensteward.clawbot.infrastructure.persistence.service.ToolCallLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,6 +94,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final CostBudgetService costBudgetService;
     private final MessageLengthGuard messageLengthGuard;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -120,6 +122,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param dynamicConfig         动态配置源（可为 null，此时行为等同静态配置）
      * @param costBudgetService     成本保护预算服务（可为 null）
      * @param messageLengthGuard    消息长度守卫（可为 null）
+     * @param eventPublisher        应用事件发布器（实时观测台事件）
+     * @param auditLogService       审计日志服务（执行性幻觉拦截留痕，A-3 / T5；可为 null）
      */
     @Autowired
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
@@ -133,7 +137,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  DynamicConfigService dynamicConfig,
                                  CostBudgetService costBudgetService,
                                  MessageLengthGuard messageLengthGuard,
-                                 ApplicationEventPublisher eventPublisher) {
+                                 ApplicationEventPublisher eventPublisher,
+                                 AuditLogService auditLogService) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -148,6 +153,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.costBudgetService = costBudgetService;
         this.messageLengthGuard = messageLengthGuard;
         this.eventPublisher = eventPublisher;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -179,7 +185,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
                 contentSafetyService, fallbackService, toolCallLogService,
                 orchestrationProperties, llmProperties, null, costBudgetService, messageLengthGuard,
-                null);
+                null, null);
     }
 
     @Override
@@ -309,6 +315,13 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         ConsistencyVerdict consistencyVerdict = consistencyChecker.check(reply, executed);
         if (!consistencyVerdict.passed()) {
             log.warn("一致性校验拦截 reply（BR-04），reason={}", consistencyVerdict.reason());
+            // 执行性幻觉拦截留痕（A-3 / T5）：作为监控看板「幻觉拦截次数」的唯一事实来源。
+            // 发送前强制拦截，故对外泄漏恒为 0；此处仅记录拦截事实（脱敏 openid，不落原文）。
+            if (auditLogService != null) {
+                auditLogService.record(null, "SAFETY", "EXECUTION_HALLUCINATION",
+                        MaskUtils.openid(openid), null, consistencyVerdict.reason().name(),
+                        "执行性幻觉拦截", null, 1);
+            }
             return fallback(request, FallbackReason.EXECUTION_HALLUCINATION, executed, llmCalls, round);
         }
 

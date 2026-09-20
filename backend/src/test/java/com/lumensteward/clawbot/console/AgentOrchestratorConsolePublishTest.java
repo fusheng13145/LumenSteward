@@ -97,7 +97,7 @@ class AgentOrchestratorConsolePublishTest {
         return new AgentOrchestratorImpl(llm, new ToolRegistry(List.of(new TestTool("query_express", false, 0L))),
                 new InMemoryContextStore(), new ContextTrimmer(new HeuristicTokenEstimator()),
                 PASS_CHECKER, PASS_SAFETY, new DefaultFallbackService(), new NoOpToolCallLogService(),
-                orchestration, llmProperties, null, null, null, publisher);
+                orchestration, llmProperties, null, null, null, publisher, null);
     }
 
     /** 可编程测试工具。 */

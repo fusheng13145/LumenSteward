@@ -30,7 +30,8 @@ const allMenus: MenuItem[] = [
   { key: 'tool-logs', label: '工具调用日志', to: '/tool-logs' },
   { key: 'configs', label: '系统配置', to: '/configs' },
   { key: 'audit-logs', label: '审计日志', to: '/audit-logs' },
-  { key: 'monitor', label: '实时观测台', to: '/monitor/console' },
+  { key: 'monitor', label: '监控看板', to: '/monitor' },
+  { key: 'monitor-console', label: '实时观测台', to: '/monitor/console' },
   { key: 'profiles', label: '档案变更留痕', to: '/profiles/history' },
 ]
 

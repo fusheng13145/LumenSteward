@@ -76,6 +76,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '审计日志', requiresAuth: true, requiredPermission: 'audit:view' },
       },
       {
+        path: 'monitor',
+        name: 'monitor',
+        component: () => import('@/views/monitor/index.vue'),
+        meta: { title: '监控看板', requiresAuth: true, requiredPermission: 'monitor:view' },
+      },
+      {
         path: 'monitor/console',
         name: 'monitor-console',
         component: () => import('@/views/monitor/console.vue'),

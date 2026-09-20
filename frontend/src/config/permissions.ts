@@ -79,6 +79,7 @@ export const MENU_PERMISSIONS: Record<string, PermissionCode> = {
   configs: PERMISSIONS.CONFIG_VIEW,
   'audit-logs': PERMISSIONS.AUDIT_VIEW,
   monitor: PERMISSIONS.MONITOR_VIEW,
+  'monitor-console': PERMISSIONS.MONITOR_VIEW,
   profiles: PERMISSIONS.PROFILE_HISTORY,
 }
 
