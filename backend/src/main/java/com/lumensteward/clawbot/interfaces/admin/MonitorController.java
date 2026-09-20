@@ -1,24 +1,33 @@
 package com.lumensteward.clawbot.interfaces.admin;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.lumensteward.clawbot.application.admin.MonitorService;
+import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationSpan;
 import com.lumensteward.clawbot.common.api.ApiResponse;
+import com.lumensteward.clawbot.common.error.ErrorCode;
+import com.lumensteward.clawbot.common.util.JsonUtils;
+import com.lumensteward.clawbot.infrastructure.persistence.entity.OrchestrationTraceEntity;
+import com.lumensteward.clawbot.infrastructure.persistence.service.OrchestrationTraceService;
 import com.lumensteward.clawbot.interfaces.dto.monitor.DegradeMetricsVO;
 import com.lumensteward.clawbot.interfaces.dto.monitor.IntentSliceVO;
 import com.lumensteward.clawbot.interfaces.dto.monitor.LatencyBucketVO;
 import com.lumensteward.clawbot.interfaces.dto.monitor.MonitorOverviewVO;
 import com.lumensteward.clawbot.interfaces.dto.monitor.SuccessRateVO;
+import com.lumensteward.clawbot.interfaces.dto.monitor.TraceWaterfallVO;
 import com.lumensteward.clawbot.interfaces.dto.monitor.TrendPointVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 会话与工具调用监控控制器（FR-17 / T4）与降级与拦截看板（A-3 / T5）。
@@ -35,14 +44,17 @@ import java.util.List;
 public class MonitorController {
 
     private final MonitorService monitorService;
+    private final OrchestrationTraceService traceService;
 
     /**
      * 构造器注入（G-14）。
      *
      * @param monitorService 监控聚合服务
+     * @param traceService   链路时序追踪服务（A-5 / T6）
      */
-    public MonitorController(MonitorService monitorService) {
+    public MonitorController(MonitorService monitorService, OrchestrationTraceService traceService) {
         this.monitorService = monitorService;
+        this.traceService = traceService;
     }
 
     /**
@@ -173,5 +185,46 @@ public class MonitorController {
                 metrics.degradedCalls(), metrics.degradedCount(), metrics.timeoutCount(),
                 metrics.degradeRate(), metrics.hallucinationInterceptions(),
                 metrics.externalLeakCount(), metrics.leakKpiPass(), layers));
+    }
+
+    /**
+     * 单次链路时序瀑布（A-5 超时预算 / T6）。
+     *
+     * <p>按 {@code traceId} 返回该链路的 LLM 轮次与工具调用时间轴（相对链路起点的偏移 + 耗时 +
+     * 状态），以及链路总耗时、总预算与是否超预算，供管理后台渲染时序瀑布图。
+     * 未找到该链路时序记录时返回 {@link ErrorCode#RESOURCE_NOT_FOUND}。
+     *
+     * @param traceId 链路标识
+     * @return 时序瀑布视图
+     */
+    @GetMapping("/trace/{traceId}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','OPERATOR','AUDITOR')")
+    @Operation(summary = "链路时序瀑布", description = "按 traceId 返回单次链路的 LLM 轮次与工具调用时间轴")
+    public ApiResponse<TraceWaterfallVO> trace(@PathVariable String traceId) {
+        Optional<OrchestrationTraceEntity> found = traceService.findByTraceId(traceId);
+        if (found.isEmpty()) {
+            return ApiResponse.error(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        return ApiResponse.success(toWaterfall(found.get()));
+    }
+
+    /**
+     * 实体 → 时序瀑布视图（反序列化 {@code span_json}）。
+     *
+     * @param entity 链路时序实体
+     * @return 时序瀑布视图
+     */
+    private TraceWaterfallVO toWaterfall(OrchestrationTraceEntity entity) {
+        List<OrchestrationSpan> spans = JsonUtils.fromJson(entity.getSpanJson(),
+                new TypeReference<List<OrchestrationSpan>>() { });
+        List<TraceWaterfallVO.SpanVO> spanVOs = (spans == null ? List.<OrchestrationSpan>of() : spans).stream()
+                .map(span -> new TraceWaterfallVO.SpanVO(span.kind().name(), span.seq(), span.round(),
+                        span.name(), span.startOffsetMs(), span.durationMs(), span.status().name()))
+                .toList();
+        return new TraceWaterfallVO(entity.getTraceId(),
+                entity.getTotalMs() == null ? 0L : entity.getTotalMs(),
+                entity.getTotalBudgetMs() == null ? 0 : entity.getTotalBudgetMs(),
+                entity.getRounds() == null ? 0 : entity.getRounds(),
+                Boolean.TRUE.equals(entity.getExceededBudget()), spanVOs);
     }
 }

@@ -101,3 +101,43 @@ export interface MonitorRangeQuery {
   /** 趋势粒度：DAY 按天（缺省），HOUR 按小时 */
   granularity?: 'DAY' | 'HOUR'
 }
+
+/** 链路时序 span 类型（对齐后端 OrchestrationSpan.SpanKind） */
+export type SpanKind = 'LLM_ROUND' | 'TOOL'
+
+/** 链路时序 span 状态（对齐后端 OrchestrationSpan.SpanStatus） */
+export type SpanStatus = 'OK' | 'FAIL' | 'DEGRADED' | 'TIMEOUT'
+
+/** 链路时序 span（GET /api/monitor/trace/{traceId}） */
+export interface TraceSpanVO {
+  /** span 类型：LLM 轮次 / 工具调用 */
+  kind: SpanKind
+  /** 链路内顺序号（从 1 递增） */
+  seq: number
+  /** 所属 Agent Loop 轮次（0 基） */
+  round: number
+  /** span 名称（工具名或 "LLM#round"） */
+  name: string
+  /** 相对链路起点的开始偏移（ms） */
+  startOffsetMs: number
+  /** 持续耗时（ms） */
+  durationMs: number
+  /** 执行状态 */
+  status: SpanStatus
+}
+
+/** 单次链路时序瀑布（GET /api/monitor/trace/{traceId}，A-5 / T6） */
+export interface TraceWaterfallVO {
+  /** 链路标识 */
+  traceId: string
+  /** 链路总耗时（ms） */
+  totalMs: number
+  /** 链路总时间预算（ms，SC-03） */
+  totalBudgetMs: number
+  /** Agent Loop 轮次 */
+  rounds: number
+  /** 是否超出总预算 */
+  exceededBudget: boolean
+  /** 时序 span 列表 */
+  spans: TraceSpanVO[]
+}

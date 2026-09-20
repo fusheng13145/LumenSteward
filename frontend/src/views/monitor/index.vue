@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import IntentChart from '@/components/charts/IntentChart.vue'
 import LatencyChart from '@/components/charts/LatencyChart.vue'
 import SuccessRateChart from '@/components/charts/SuccessRateChart.vue'
+import TraceWaterfallChart from '@/components/charts/TraceWaterfallChart.vue'
 import TrendChart from '@/components/charts/TrendChart.vue'
 import { monitorApi } from '@/services/monitor.api'
 import { sessionApi } from '@/services/session.api'
@@ -15,6 +16,7 @@ import type {
   LatencyBucketVO,
   MonitorOverviewVO,
   SuccessRateVO,
+  TraceWaterfallVO,
   TrendPointVO,
 } from '@/types/monitor'
 import type { MessageVO, SessionVO } from '@/types/session'
@@ -37,7 +39,7 @@ import { maskOpenid } from '@/utils/mask'
  */
 const toast = useToastStore()
 
-const activeTab = ref<'overview' | 'sessions' | 'tools'>('overview')
+const activeTab = ref<'overview' | 'sessions' | 'tools' | 'trace'>('overview')
 const loading = ref(false)
 
 // ===== 时间范围与粒度 =====
@@ -80,6 +82,11 @@ const toolTotal = ref(0)
 const toolStats = ref<ToolStatsVO | null>(null)
 const toolDetailVisible = ref(false)
 const toolDetail = ref<ToolLogDetailVO | null>(null)
+
+// ===== 链路时序瀑布（A-5 / T6） =====
+const traceIdInput = ref('')
+const traceLoading = ref(false)
+const traceData = ref<TraceWaterfallVO | null>(null)
 
 const STATE_OPTIONS = [
   { label: '空闲', value: SESSION_STATE.IDLE },
@@ -136,6 +143,14 @@ function statusTag(status: number): 'success' | 'danger' | 'warning' | 'info' {
   if (status === 0) return 'success'
   if (status === 2) return 'warning'
   if (status === 1 || status === 3) return 'danger'
+  return 'info'
+}
+
+/** span 状态 → Element Plus 标签色（A-5 / T6） */
+function spanStatusTag(status: string): 'success' | 'danger' | 'warning' | 'info' {
+  if (status === 'OK') return 'success'
+  if (status === 'DEGRADED') return 'warning'
+  if (status === 'FAIL' || status === 'TIMEOUT') return 'danger'
   return 'info'
 }
 
@@ -260,6 +275,24 @@ async function openToolDetail(row: ToolLogVO): Promise<void> {
     toolDetailVisible.value = true
   } catch (error) {
     toast.error(error instanceof Error ? error.message : '工具日志详情加载失败')
+  }
+}
+
+/** 按 traceId 查询单次链路时序瀑布（A-5 / T6） */
+async function loadTrace(): Promise<void> {
+  const traceId = traceIdInput.value.trim()
+  if (!traceId) {
+    toast.warning('请输入 traceId')
+    return
+  }
+  traceLoading.value = true
+  try {
+    traceData.value = await monitorApi.getTrace(traceId)
+  } catch (error) {
+    traceData.value = null
+    toast.error(error instanceof Error ? error.message : '未找到该链路的时序记录')
+  } finally {
+    traceLoading.value = false
   }
 }
 
@@ -686,6 +719,145 @@ onMounted(refresh)
           :current-page="toolPage.page"
           :page-size="toolPage.pageSize"
           @current-change="(value: number) => { toolPage.page = value; loadTools() }"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane
+        label="链路时序（A-5）"
+        name="trace"
+      >
+        <el-form
+          class="filters"
+          inline
+          @submit.prevent="loadTrace"
+        >
+          <el-form-item label="traceId">
+            <el-input
+              v-model="traceIdInput"
+              placeholder="输入链路 traceId"
+              clearable
+              style="width: 320px"
+              @keyup.enter="loadTrace"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              :loading="traceLoading"
+              @click="loadTrace"
+            >
+              查询时序
+            </el-button>
+          </el-form-item>
+        </el-form>
+
+        <template v-if="traceData">
+          <div class="cards">
+            <div class="card">
+              <div class="card__label">
+                链路总耗时
+              </div>
+              <div class="card__value">
+                {{ traceData.totalMs }} ms
+              </div>
+            </div>
+            <div class="card">
+              <div class="card__label">
+                时间预算
+              </div>
+              <div class="card__value">
+                {{ traceData.totalBudgetMs }} ms
+              </div>
+            </div>
+            <div class="card">
+              <div class="card__label">
+                Agent 轮次
+              </div>
+              <div class="card__value">
+                {{ traceData.rounds }}
+              </div>
+            </div>
+            <div
+              class="card"
+              :class="{ 'card--kpi': traceData.exceededBudget }"
+            >
+              <div class="card__label">
+                预算状态
+              </div>
+              <div class="card__value">
+                <el-tag
+                  :type="traceData.exceededBudget ? 'danger' : 'success'"
+                  size="small"
+                >
+                  {{ traceData.exceededBudget ? '超预算' : '预算内' }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart">
+            <h4>时序瀑布（{{ traceData.spans.length }} 个 span）</h4>
+            <TraceWaterfallChart :trace="traceData" />
+          </div>
+
+          <el-table
+            :data="traceData.spans"
+            border
+            size="small"
+            class="anomaly"
+          >
+            <el-table-column
+              prop="seq"
+              label="#"
+              width="60"
+            />
+            <el-table-column
+              prop="name"
+              label="名称"
+              min-width="150"
+            />
+            <el-table-column
+              label="类型"
+              width="110"
+            >
+              <template #default="{ row }">
+                {{ row.kind === 'TOOL' ? '工具调用' : 'LLM 轮次' }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="round"
+              label="轮次"
+              width="80"
+            />
+            <el-table-column
+              prop="startOffsetMs"
+              label="开始(ms)"
+              width="110"
+            />
+            <el-table-column
+              prop="durationMs"
+              label="耗时(ms)"
+              width="110"
+            />
+            <el-table-column
+              label="状态"
+              width="110"
+            >
+              <template #default="{ row }">
+                <el-tag
+                  :type="spanStatusTag(row.status)"
+                  size="small"
+                >
+                  {{ row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+
+        <el-empty
+          v-else
+          description="输入 traceId 查看该链路的 LLM 轮次与工具调用时间轴"
         />
       </el-tab-pane>
     </el-tabs>

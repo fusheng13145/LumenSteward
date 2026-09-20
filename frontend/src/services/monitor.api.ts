@@ -6,6 +6,7 @@ import type {
   MonitorOverviewVO,
   MonitorRangeQuery,
   SuccessRateVO,
+  TraceWaterfallVO,
   TrendPointVO,
 } from '@/types/monitor'
 
@@ -44,5 +45,13 @@ export const monitorApi = {
   /** 延迟分布（GET /api/monitor/latency-distribution） */
   latencyDistribution(params?: MonitorRangeQuery): Promise<LatencyBucketVO[]> {
     return request<LatencyBucketVO[]>({ url: '/monitor/latency-distribution', method: 'get', params })
+  },
+
+  /** 单次链路时序瀑布（GET /api/monitor/trace/{traceId}，A-5 / T6） */
+  getTrace(traceId: string): Promise<TraceWaterfallVO> {
+    return request<TraceWaterfallVO>({
+      url: `/monitor/trace/${encodeURIComponent(traceId)}`,
+      method: 'get',
+    })
   },
 }

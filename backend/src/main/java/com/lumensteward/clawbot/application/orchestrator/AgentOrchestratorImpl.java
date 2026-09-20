@@ -8,6 +8,7 @@ import com.lumensteward.clawbot.application.fallback.FallbackReason;
 import com.lumensteward.clawbot.application.fallback.FallbackService;
 import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationRequest;
 import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationResult;
+import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationSpan;
 import com.lumensteward.clawbot.application.console.ConsoleEvent;
 import com.lumensteward.clawbot.application.console.ConsoleEventType;
 import com.lumensteward.clawbot.application.orchestrator.model.ToolCallRecord;
@@ -219,6 +220,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         String traceId = resolveTraceId(request);
         String openid = request.openid();
         Long sessionId = request.sessionId();
+        // 链路时序记录器（A-5 / T6）：以链路起点为时间原点收集 span，链路结束发布追踪事件
+        int totalBudgetMs = Math.max(1, dynamicInt(ConfigKeys.ORCHESTRATION_TOTAL_BUDGET_MS,
+                orchestrationProperties.totalBudgetMs()));
+        TraceRecorder trace = new TraceRecorder(traceId, openid, sessionId, totalBudgetMs);
         int maxRounds = Math.max(1, dynamicInt(ConfigKeys.ORCHESTRATION_MAX_ROUNDS,
                 orchestrationProperties.maxRounds()));
         int maxParallel = Math.max(1, dynamicInt(ConfigKeys.ORCHESTRATION_MAX_PARALLEL_TOOLS,
@@ -251,6 +256,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
         ChatResult response = null;
         while (round < maxRounds) {
+            long llmStartNanos = System.nanoTime();
             try {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
                 recordUsage(response);
@@ -258,8 +264,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             } catch (LlmException e) {
                 FallbackReason reason = mapLlmReason(e);
                 log.warn("LLM 调用失败，走降级: errType={} reason={}", e.errorType(), reason);
-                return fallback(request, reason, executed, llmCalls, round);
+                trace.recordLlm(round, llmStartNanos, OrchestrationSpan.SpanStatus.FAIL);
+                return fallback(request, reason, executed, llmCalls, round, trace);
             }
+            trace.recordLlm(round, llmStartNanos, OrchestrationSpan.SpanStatus.OK);
 
             if (response == null || !response.hasToolCalls()) {
                 break;
@@ -273,11 +281,12 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             messages.add(ChatMessage.assistantToolCalls(calls));
 
             for (ToolCall call : calls) {
-                ToolOutcome outcome = executeOne(call, round, callSeq[0] + 1, traceId, openid, sessionId, executed);
+                ToolOutcome outcome = executeOne(call, round, callSeq[0] + 1, traceId, openid, sessionId,
+                        executed, trace);
                 callSeq[0]++;
                 messages.add(ChatMessage.tool(call.id(), call.functionName(), outcome.messageContent()));
                 if (outcome.interrupt()) {
-                    return fallback(request, outcome.interruptReason(), executed, llmCalls, round);
+                    return fallback(request, outcome.interruptReason(), executed, llmCalls, round, trace);
                 }
             }
             round++;
@@ -287,20 +296,23 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         boolean forcedConvergence = round >= maxRounds;
         if (forcedConvergence) {
             messages.add(ChatMessage.system("请基于已有信息给出回复，并说明信息可能不完整。"));
+            long convStartNanos = System.nanoTime();
             try {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
                 recordUsage(response);
                 llmCalls++;
             } catch (LlmException e) {
                 log.warn("强制收敛调用失败: errType={}", e.errorType());
-                return fallback(request, FallbackReason.FORCED_CONVERGENCE, executed, llmCalls, round);
+                trace.recordLlm(round, convStartNanos, OrchestrationSpan.SpanStatus.FAIL);
+                return fallback(request, FallbackReason.FORCED_CONVERGENCE, executed, llmCalls, round, trace);
             }
+            trace.recordLlm(round, convStartNanos, OrchestrationSpan.SpanStatus.OK);
         }
 
         String reply = response == null ? null : response.content();
         if (reply == null || reply.isBlank()) {
             // 无终态文本：诚实兜底（不编造）
-            return fallback(request, FallbackReason.EMPTY_RESULT, executed, llmCalls, round);
+            return fallback(request, FallbackReason.EMPTY_RESULT, executed, llmCalls, round, trace);
         }
 
         // 输出治理 1：内容安全（Fail-Closed）
@@ -308,7 +320,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         if (!safetyVerdict.passed()) {
             FallbackReason reason = safetyVerdict.serviceUnavailable()
                     ? FallbackReason.SAFETY_UNAVAILABLE : FallbackReason.CONTENT_BLOCKED;
-            return fallback(request, reason, executed, llmCalls, round);
+            return fallback(request, reason, executed, llmCalls, round, trace);
         }
 
         // 输出治理 2：执行一致性校验（保守：任一声明无支撑即整条拦截）
@@ -322,7 +334,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                         MaskUtils.openid(openid), null, consistencyVerdict.reason().name(),
                         "执行性幻觉拦截", null, 1);
             }
-            return fallback(request, FallbackReason.EXECUTION_HALLUCINATION, executed, llmCalls, round);
+            return fallback(request, FallbackReason.EXECUTION_HALLUCINATION, executed, llmCalls, round, trace);
         }
 
         // 严格模式：存在失败工具调用时前置免责说明（9.4.5 异常流 3a）
@@ -339,6 +351,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                 MaskUtils.openid(openid), round, llmCalls, executed.size());
         publishConsole(ConsoleEventType.MESSAGE_DELTA, traceId, openid, sessionId, round, null, null, reply);
         publishConsole(ConsoleEventType.DONE, traceId, openid, sessionId, round, null, null, null);
+        // 链路结束：发布时序追踪事件（A-5 / T6，best-effort，落库失败不影响主链路）
+        trace.publish(eventPublisher, log, round);
         return new OrchestrationResult(reply, SessionState.TASKING, executed, null, llmCalls, round);
     }
 
@@ -371,10 +385,11 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param openid    用户
      * @param sessionId 会话
      * @param executed  已执行记录（收集器）
+     * @param trace     链路时序记录器（A-5 / T6）
      * @return 执行产物（含回注内容与是否中断）
      */
     private ToolOutcome executeOne(ToolCall call, int round, int callSeq, String traceId, String openid,
-                                   Long sessionId, List<ToolCallRecord> executed) {
+                                   Long sessionId, List<ToolCallRecord> executed, TraceRecorder trace) {
         String name = call.functionName();
         JsonNode args = JsonUtils.readTree(call.argumentsJson());
 
@@ -383,7 +398,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         if (toolOpt.isEmpty()) {
             ToolResult result = ToolResult.notExecuted("TOOL_NOT_FOUND",
                     "工具未注册，可用工具: " + toolRegistry.names());
-            recordNotExecuted(call, round, callSeq, traceId, openid, sessionId, executed, result);
+            recordNotExecuted(call, round, callSeq, traceId, openid, sessionId, executed, result, trace);
             return new ToolOutcome(toToolContent(call.id(), name, result), false, null);
         }
         Tool tool = toolOpt.get();
@@ -393,19 +408,21 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         if (!validation.valid()) {
             ToolResult result = ToolResult.notExecuted("INVALID_ARGS",
                     "参数非法: " + validation.describe());
-            recordNotExecuted(call, round, callSeq, traceId, openid, sessionId, executed, result);
+            recordNotExecuted(call, round, callSeq, traceId, openid, sessionId, executed, result, trace);
             return new ToolOutcome(toToolContent(call.id(), name, result), false, null);
         }
 
         // 执行（同步日志：logStart → execute → logEnd，ADR-003）
         ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round, callSeq);
         publishConsole(ConsoleEventType.TOOL_START, traceId, openid, sessionId, round, name, callSeq, null);
+        long toolStartNanos = System.nanoTime();
         long start = System.currentTimeMillis();
         ToolResult result = executeWithTimeout(tool, traceId, openid, sessionId, round, args);
         long latency = System.currentTimeMillis() - start;
         ToolResult timed = new ToolResult(result.status(), result.errorType(), result.message(),
                 result.data(), result.retryable(), latency);
         toolCallLogService.logEnd(record, timed);
+        trace.recordTool(round, name, toolStartNanos, toSpanStatus(timed.status()));
         publishConsole(ConsoleEventType.TOOL_END, traceId, openid, sessionId, round, name, callSeq,
                 JsonUtils.toJson(java.util.Map.of("status", timed.status().name(), "latencyMs", timed.latencyMs())));
         executed.add(record.withOutcome(timed, latency));
@@ -421,10 +438,13 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     }
 
     private void recordNotExecuted(ToolCall call, int round, int callSeq, String traceId, String openid,
-                                   Long sessionId, List<ToolCallRecord> executed, ToolResult result) {
+                                   Long sessionId, List<ToolCallRecord> executed, ToolResult result,
+                                   TraceRecorder trace) {
+        long toolStartNanos = System.nanoTime();
         ToolCallRecord record = toolCallLogService.logStart(traceId, openid, sessionId, call, round, callSeq);
         publishConsole(ConsoleEventType.TOOL_START, traceId, openid, sessionId, round, call.functionName(), callSeq, null);
         toolCallLogService.logEnd(record, result);
+        trace.recordTool(round, call.functionName(), toolStartNanos, toSpanStatus(result.status()));
         publishConsole(ConsoleEventType.TOOL_END, traceId, openid, sessionId, round, call.functionName(), callSeq,
                 JsonUtils.toJson(java.util.Map.of("status", result.status().name())));
         executed.add(record.withOutcome(result, 0L));
@@ -594,7 +614,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     }
 
     private OrchestrationResult fallback(OrchestrationRequest request, FallbackReason reason,
-                                         List<ToolCallRecord> executed, int llmCalls, int rounds) {
+                                         List<ToolCallRecord> executed, int llmCalls, int rounds,
+                                         TraceRecorder trace) {
         String text = fallbackService.render(reason, Map.of());
         SessionState state = (reason == FallbackReason.LLM_TIMEOUT || reason == FallbackReason.LLM_UNAVAILABLE
                 || reason == FallbackReason.LLM_INVALID_OUTPUT)
@@ -604,7 +625,114 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                 request.sessionId(), rounds, null, null, text);
         publishConsole(ConsoleEventType.DONE, request.traceId(), request.openid(),
                 request.sessionId(), rounds, null, null, null);
+        // 降级链路同样发布时序追踪（A-5 / T6，best-effort）
+        if (trace != null) {
+            trace.publish(eventPublisher, log, rounds);
+        }
         return new OrchestrationResult(text, state, executed, reason.name(), llmCalls, rounds);
+    }
+
+    /**
+     * 工具状态 → 时序 span 状态映射（A-5 / T6）。
+     *
+     * @param status 工具执行状态（可空）
+     * @return span 状态；未执行（工具未注册 / 参数非法）与失败统一记为 {@code FAIL}
+     */
+    private static OrchestrationSpan.SpanStatus toSpanStatus(ToolStatus status) {
+        if (status == null) {
+            return OrchestrationSpan.SpanStatus.FAIL;
+        }
+        return switch (status) {
+            case SUCCESS -> OrchestrationSpan.SpanStatus.OK;
+            case DEGRADED -> OrchestrationSpan.SpanStatus.DEGRADED;
+            case TIMEOUT -> OrchestrationSpan.SpanStatus.TIMEOUT;
+            case FAILED, NOT_EXECUTED -> OrchestrationSpan.SpanStatus.FAIL;
+        };
+    }
+
+    /**
+     * 链路时序记录器（A-5 / T6）。
+     *
+     * <p>以链路起点 {@code nanoTime} 为时间原点，收集各 span 的<b>相对偏移</b>与<b>耗时</b>，
+     * 并在链路结束时组装 {@link OrchestrationTracedEvent} 经 {@link ApplicationEventPublisher}
+     * 发布。发布失败仅记 WARN，<b>不影响主链路</b>（与 {@code publishConsole} 同范式）。
+     *
+     * <p>{@code seq} 由 span 的加入顺序自增（从 1），供瀑布图纵轴排序。
+     */
+    private static final class TraceRecorder {
+
+        private final String traceId;
+        private final String openid;
+        private final Long sessionId;
+        private final long startNanos;
+        private final int totalBudgetMs;
+        private final List<OrchestrationSpan> spans = new ArrayList<>();
+
+        /**
+         * @param traceId       链路标识
+         * @param openid        用户标识（由事件构造脱敏）
+         * @param sessionId     会话 id
+         * @param totalBudgetMs 链路总预算（ms）
+         */
+        TraceRecorder(String traceId, String openid, Long sessionId, int totalBudgetMs) {
+            this.traceId = traceId;
+            this.openid = openid;
+            this.sessionId = sessionId;
+            this.totalBudgetMs = totalBudgetMs;
+            this.startNanos = System.nanoTime();
+        }
+
+        /**
+         * 记录一轮 LLM 调用 span。
+         *
+         * @param round          轮次（0 基）
+         * @param spanStartNanos 该次调用开始的 {@code nanoTime}
+         * @param status         span 状态
+         */
+        void recordLlm(int round, long spanStartNanos, OrchestrationSpan.SpanStatus status) {
+            record(OrchestrationSpan.SpanKind.LLM_ROUND, round, "LLM#" + round, spanStartNanos, status);
+        }
+
+        /**
+         * 记录一次工具调用 span。
+         *
+         * @param round          所属轮次
+         * @param toolName       工具名
+         * @param spanStartNanos 该次调用开始的 {@code nanoTime}
+         * @param status         span 状态
+         */
+        void recordTool(int round, String toolName, long spanStartNanos, OrchestrationSpan.SpanStatus status) {
+            record(OrchestrationSpan.SpanKind.TOOL, round, toolName, spanStartNanos, status);
+        }
+
+        private void record(OrchestrationSpan.SpanKind kind, int round, String name,
+                            long spanStartNanos, OrchestrationSpan.SpanStatus status) {
+            long endNanos = System.nanoTime();
+            long offsetMs = Math.max(0L, (spanStartNanos - startNanos) / 1_000_000L);
+            long durationMs = Math.max(0L, (endNanos - spanStartNanos) / 1_000_000L);
+            spans.add(new OrchestrationSpan(kind, spans.size() + 1, round, name,
+                    offsetMs, durationMs, status));
+        }
+
+        /**
+         * 组装并发布链路时序事件（best-effort）。
+         *
+         * @param publisher 应用事件发布器（为 null 时跳过）
+         * @param logger    调用方 logger（发布失败记 WARN）
+         * @param rounds    Agent Loop 轮次
+         */
+        void publish(ApplicationEventPublisher publisher, Logger logger, int rounds) {
+            if (publisher == null) {
+                return;
+            }
+            try {
+                long totalMs = Math.max(0L, (System.nanoTime() - startNanos) / 1_000_000L);
+                publisher.publishEvent(new OrchestrationTracedEvent(traceId, openid, sessionId,
+                        totalMs, totalBudgetMs, rounds, totalMs > totalBudgetMs, spans));
+            } catch (Exception e) {
+                logger.warn("发布 OrchestrationTracedEvent 失败 traceId={}", traceId);
+            }
+        }
     }
 
     /**
