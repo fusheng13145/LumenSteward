@@ -55,3 +55,17 @@ export interface SessionQuery extends PageQuery {
   /** 状态过滤 */
   state?: string
 }
+
+/** 任务进度视图（GET /api/tasks/{sessionId}，FR-24 / T8） */
+export interface TaskContextVO {
+  /** 任务类型（触发工具名，如 query_express）；无任务为 null */
+  taskType: string | null
+  /** 必填槽位（与工具 Schema required 字段名同源） */
+  requiredSlots: string[]
+  /** 已填槽位（槽位名 → 值） */
+  filledSlots: Record<string, string>
+  /** 任务过期时刻（ISO 8601） */
+  expireAt: string | null
+  /** 会话状态：IDLE/CHATTING/TASKING/DEGRADED */
+  state: string
+}

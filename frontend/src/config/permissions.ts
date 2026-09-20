@@ -35,6 +35,8 @@ export const PERMISSIONS = {
   MONITOR_VIEW: 'monitor:view',
   /** 档案变更留痕查看（A-4 / 迭代 3 Wave 2 T7） */
   PROFILE_HISTORY: 'profile:history',
+  /** 任务手动放弃（FR-24 / 迭代 3 Wave 2 T8；OPERATOR+，AUDITOR 不可） */
+  TASK_ABANDON: 'task:abandon',
 } as const
 
 /** 权限码字面量联合类型 */
@@ -57,6 +59,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.MONITOR_VIEW,
     PERMISSIONS.PROFILE_HISTORY,
     PERMISSIONS.DOCTOR_VIEW,
+    PERMISSIONS.TASK_ABANDON,
   ],
   // 审计员：日志与统计只读；不可修改任何业务数据
   AUDITOR: [

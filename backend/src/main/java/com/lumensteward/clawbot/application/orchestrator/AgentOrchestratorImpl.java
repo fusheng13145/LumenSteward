@@ -13,6 +13,8 @@ import com.lumensteward.clawbot.application.console.ConsoleEvent;
 import com.lumensteward.clawbot.application.console.ConsoleEventType;
 import com.lumensteward.clawbot.application.orchestrator.model.ToolCallRecord;
 import com.lumensteward.clawbot.application.ratelimit.CostBudgetService;
+import com.lumensteward.clawbot.application.task.SlotFillOutcome;
+import com.lumensteward.clawbot.application.task.TaskSessionService;
 import com.lumensteward.clawbot.application.safety.ConsistencyChecker;
 import com.lumensteward.clawbot.application.safety.ConsistencyVerdict;
 import com.lumensteward.clawbot.application.safety.ContentSafetyService;
@@ -23,6 +25,8 @@ import com.lumensteward.clawbot.common.enums.ToolStatus;
 import com.lumensteward.clawbot.common.util.JsonUtils;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.context.ContextStore;
+import com.lumensteward.clawbot.domain.model.TaskContext;
+import com.lumensteward.clawbot.domain.tool.JsonSchema;
 import com.lumensteward.clawbot.domain.tool.Tool;
 import com.lumensteward.clawbot.domain.tool.ToolContext;
 import com.lumensteward.clawbot.domain.tool.ToolRegistry;
@@ -51,6 +55,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -96,6 +101,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final MessageLengthGuard messageLengthGuard;
     private final ApplicationEventPublisher eventPublisher;
     private final AuditLogService auditLogService;
+    /** 任务型多步会话服务（FR-24 / T8；可为 null，此时退化为无跨轮任务记忆）。 */
+    private final TaskSessionService taskSessionService;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -125,6 +132,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param messageLengthGuard    消息长度守卫（可为 null）
      * @param eventPublisher        应用事件发布器（实时观测台事件）
      * @param auditLogService       审计日志服务（执行性幻觉拦截留痕，A-3 / T5；可为 null）
+     * @param taskSessionService    任务型多步会话服务（FR-24 / T8；可为 null）
      */
     @Autowired
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
@@ -139,7 +147,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  CostBudgetService costBudgetService,
                                  MessageLengthGuard messageLengthGuard,
                                  ApplicationEventPublisher eventPublisher,
-                                 AuditLogService auditLogService) {
+                                 AuditLogService auditLogService,
+                                 TaskSessionService taskSessionService) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -155,6 +164,45 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.messageLengthGuard = messageLengthGuard;
         this.eventPublisher = eventPublisher;
         this.auditLogService = auditLogService;
+        this.taskSessionService = taskSessionService;
+    }
+
+    /**
+     * 兼容构造（无任务服务）：保留给既有单元测试与内部调用，行为等同「无跨轮任务记忆」。
+     *
+     * @param llmClient             LLM 客户端
+     * @param toolRegistry          工具注册中心
+     * @param contextStore          上下文存储
+     * @param contextTrimmer        上下文裁剪器
+     * @param consistencyChecker    执行一致性校验
+     * @param contentSafetyService  内容安全
+     * @param fallbackService       兜底文案
+     * @param toolCallLogService    工具调用日志（同步）
+     * @param orchestrationProperties 编排配置
+     * @param llmProperties         LLM 配置
+     * @param dynamicConfig         动态配置源
+     * @param costBudgetService     成本保护预算服务
+     * @param messageLengthGuard    消息长度守卫
+     * @param eventPublisher        应用事件发布器
+     * @param auditLogService       审计日志服务
+     */
+    public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
+                                 ContextStore contextStore, ContextTrimmer contextTrimmer,
+                                 ConsistencyChecker consistencyChecker,
+                                 ContentSafetyService contentSafetyService,
+                                 FallbackService fallbackService,
+                                 ToolCallLogService toolCallLogService,
+                                 OrchestrationProperties orchestrationProperties,
+                                 LlmProperties llmProperties,
+                                 DynamicConfigService dynamicConfig,
+                                 CostBudgetService costBudgetService,
+                                 MessageLengthGuard messageLengthGuard,
+                                 ApplicationEventPublisher eventPublisher,
+                                 AuditLogService auditLogService) {
+        this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
+                contentSafetyService, fallbackService, toolCallLogService,
+                orchestrationProperties, llmProperties, dynamicConfig, costBudgetService,
+                messageLengthGuard, eventPublisher, auditLogService, null);
     }
 
     /**
@@ -237,6 +285,39 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         // 链路内工具调用序号（AC-B6/B7：call_seq 按实际执行顺序从 1 递增）
         int[] callSeq = {0};
 
+        // ===== FR-24 任务型多步会话：优先续接既有任务（槽位填充），命中则跳过全量意图识别 =====
+        String taskResumeHint = null;
+        String topicSwitchNote = null;
+        if (taskSessionService != null && openid != null && !openid.isBlank()) {
+            SlotFillOutcome outcome = taskSessionService.fillSlot(openid, userMessage);
+            switch (outcome.status()) {
+                case SLOT_FILLED_COMPLETE -> {
+                    TaskContext resumed = taskSessionService.resume(openid).orElse(outcome.context());
+                    taskResumeHint = renderResumeHint(resumed);
+                    log.info("任务槽位齐备，续接执行 openid={} taskType={}",
+                            MaskUtils.openid(openid), resumed.taskType());
+                }
+                case SLOT_FILLED_INCOMPLETE, INVALID_REPROMPT -> {
+                    String prompt = outcome.replyText();
+                    publishConsole(ConsoleEventType.MESSAGE_DELTA, traceId, openid, sessionId, 0, null, null, prompt);
+                    publishConsole(ConsoleEventType.DONE, traceId, openid, sessionId, 0, null, null, null);
+                    return new OrchestrationResult(prompt, SessionState.TASKING, List.of(),
+                            FallbackReason.MISSING_SLOT.name(), 0, 0);
+                }
+                case ABANDONED -> {
+                    String text = outcome.replyText();
+                    publishConsole(ConsoleEventType.MESSAGE_DELTA, traceId, openid, sessionId, 0, null, null, text);
+                    publishConsole(ConsoleEventType.DONE, traceId, openid, sessionId, 0, null, null, null);
+                    return new OrchestrationResult(text, SessionState.IDLE, List.of(),
+                            FallbackReason.MISSING_SLOT.name(), 0, 0);
+                }
+                case TOPIC_SWITCH -> topicSwitchNote = outcome.replyText();
+                case NO_TASK -> {
+                    // 无活跃任务：走普通编排
+                }
+            }
+        }
+
         // 上下文：优先使用请求携带的历史，否则从 ContextStore 载入（BR-07 按 openid 隔离）
         if (!contextStore.isAvailable()) {
             log.warn("上下文存储不可用，进入无状态降级（BR-07 / 9.5）");
@@ -250,6 +331,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(ChatMessage.system(SYSTEM_PROMPT));
         messages.addAll(trimmed);
+        // FR-24：槽位齐备续接执行时，向模型注入已确认参数提示（不改变工具契约）
+        if (taskResumeHint != null) {
+            messages.add(ChatMessage.system(taskResumeHint));
+        }
         messages.add(ChatMessage.user(userMessage));
 
         List<JsonNode> tools = toolRegistry.enabledSchemas(disabledTools());
@@ -343,6 +428,11 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             reply = "（提示：部分步骤未能完成）" + reply;
         }
 
+        // FR-24：话题明显切换已中断先前任务，前置说明提醒用户（本回复服务新话题）
+        if (topicSwitchNote != null && !topicSwitchNote.isBlank()) {
+            reply = topicSwitchNote + reply;
+        }
+
         // 写回上下文（best-effort）
         contextStore.appendAll(openid, List.of(ChatMessage.user(userMessage),
                 ChatMessage.assistant(reply)));
@@ -353,7 +443,107 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         publishConsole(ConsoleEventType.DONE, traceId, openid, sessionId, round, null, null, null);
         // 链路结束：发布时序追踪事件（A-5 / T6，best-effort，落库失败不影响主链路）
         trace.publish(eventPublisher, log, round);
+
+        // ===== FR-24：本轮因缺必填参数暂停（追问）时建立任务，以承接用户后续补充 =====
+        if (taskSessionService != null && sessionId != null) {
+            MissingSlot missing = detectMissingSlot(executed);
+            if (missing != null) {
+                taskSessionService.createOrUpdate(openid, sessionId, missing.taskType(), missing.slots());
+            }
+        }
         return new OrchestrationResult(reply, SessionState.TASKING, executed, null, llmCalls, round);
+    }
+
+    /**
+     * 从本轮已执行工具记录中识别「缺必填参数」的暂停点（FR-24 接入点）。
+     *
+     * <p>判定依据：工具返回 {@code INVALID_ARGS}（含 Schema 校验失败与工具内部缺参），据此取该工具
+     * JSON-Schema 的 {@code required} 字段与已提供入参之差作为待填槽位。找不到则返回 null（不建立任务）。
+     *
+     * @param executed 本轮已执行工具记录
+     * @return 缺参任务描述；无则 null
+     */
+    private MissingSlot detectMissingSlot(List<ToolCallRecord> executed) {
+        if (executed == null || executed.isEmpty()) {
+            return null;
+        }
+        for (ToolCallRecord record : executed) {
+            if (!"INVALID_ARGS".equals(record.errorType()) || record.toolName() == null) {
+                continue;
+            }
+            Optional<Tool> toolOpt = toolRegistry.find(record.toolName());
+            if (toolOpt.isEmpty()) {
+                continue;
+            }
+            List<String> required = requiredFields(toolOpt.get().parametersSchema());
+            if (required.isEmpty()) {
+                continue;
+            }
+            JsonNode params = record.params();
+            List<String> missing = new ArrayList<>();
+            for (String field : required) {
+                if (params == null || !params.hasNonNull(field) || params.get(field).asText().isBlank()) {
+                    missing.add(field);
+                }
+            }
+            if (!missing.isEmpty()) {
+                return new MissingSlot(record.toolName(), missing);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 读取工具参数的必填字段名（JSON-Schema {@code required}）。
+     *
+     * @param schema 工具参数 Schema
+     * @return 必填字段名列表
+     */
+    private static List<String> requiredFields(JsonSchema schema) {
+        JsonNode node = schema == null ? null : schema.node();
+        JsonNode required = node == null ? null : node.get("required");
+        List<String> fields = new ArrayList<>();
+        if (required != null && required.isArray()) {
+            for (JsonNode item : required) {
+                if (item.isTextual() && !item.asText().isBlank()) {
+                    fields.add(item.asText());
+                }
+            }
+        }
+        return fields;
+    }
+
+    /**
+     * 生成槽位齐备续接执行的系统提示（向模型注入已确认参数，不改变工具契约）。
+     *
+     * @param task 已齐备的任务上下文
+     * @return 系统提示文本
+     */
+    private static String renderResumeHint(TaskContext task) {
+        if (task == null) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder("用户此前发起任务（")
+                .append(task.taskType())
+                .append("），已补齐全部必要参数：");
+        int index = 0;
+        for (Map.Entry<String, String> e : task.filledSlots().entrySet()) {
+            if (index++ > 0) {
+                sb.append("，");
+            }
+            sb.append(e.getKey()).append("=").append(e.getValue());
+        }
+        sb.append("。请直接基于这些参数完成该任务，不要再追问。");
+        return sb.toString();
+    }
+
+    /**
+     * 缺参任务描述（内部值对象）。
+     *
+     * @param taskType 任务类型（触发工具名）
+     * @param slots    待填必填槽位
+     */
+    private record MissingSlot(String taskType, List<String> slots) {
     }
 
     /**
