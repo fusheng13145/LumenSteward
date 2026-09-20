@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.lumensteward.clawbot.application.admin.DashboardService;
 import com.lumensteward.clawbot.application.admin.MonitorService;
 import com.lumensteward.clawbot.application.admin.ToolLogQueryService;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.AnomalyEventMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.AuditLogMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -33,9 +34,10 @@ class MonitorServiceTest {
     private final ToolLogQueryService toolLogQueryService = mock(ToolLogQueryService.class);
     private final ToolCallLogMapper toolCallLogMapper = mock(ToolCallLogMapper.class);
     private final AuditLogMapper auditLogMapper = mock(AuditLogMapper.class);
+    private final AnomalyEventMapper anomalyEventMapper = mock(AnomalyEventMapper.class);
 
     private final MonitorService service = new MonitorService(dashboardService, toolLogQueryService,
-            toolCallLogMapper, auditLogMapper);
+            toolCallLogMapper, auditLogMapper, anomalyEventMapper);
 
     @Test
     @DisplayName("概览：复用 DashboardService 计数并补以平均耗时")
@@ -189,6 +191,36 @@ class MonitorServiceTest {
         assertThat(byLayer).containsEntry("L1", 0L)
                 .containsEntry("L2", 0L)
                 .containsEntry("L3", 6L)
+                .containsEntry("L4", 0L);
+    }
+
+    @Test
+    @DisplayName("四层分布：L1/L2 由 log_anomaly_event 显式层次合并计入（W1）")
+    void shouldMergeAnomalyEventLayersIntoDistribution() {
+        when(toolCallLogMapper.selectCount(any(Wrapper.class))).thenReturn(10L);
+        Map<String, Object> toolErr = new HashMap<>();
+        toolErr.put("error_type", "TOOL_TIMEOUT");
+        toolErr.put("total", 3L);
+        when(toolCallLogMapper.selectMaps(any(Wrapper.class))).thenReturn(List.of(toolErr));
+
+        Map<String, Object> l1 = new HashMap<>();
+        l1.put("layer", "L1");
+        l1.put("total", 4L);
+        Map<String, Object> l2 = new HashMap<>();
+        l2.put("layer", "L2");
+        l2.put("total", 2L);
+        Map<String, Object> unknownLayer = new HashMap<>();
+        unknownLayer.put("layer", "L9");
+        when(anomalyEventMapper.selectMaps(any(Wrapper.class)))
+                .thenReturn(List.of(l1, l2, unknownLayer));
+
+        MonitorService.DegradeMetrics metrics = service.degradeMetrics(null, null);
+
+        Map<String, Long> byLayer = new HashMap<>();
+        metrics.anomalyDistribution().forEach(layer -> byLayer.put(layer.layer(), layer.count()));
+        assertThat(byLayer).containsEntry("L1", 4L)
+                .containsEntry("L2", 2L)
+                .containsEntry("L3", 3L)
                 .containsEntry("L4", 0L);
     }
 

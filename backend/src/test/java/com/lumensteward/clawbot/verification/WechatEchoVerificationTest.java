@@ -20,7 +20,7 @@ import static org.mockito.Mockito.mock;
 class WechatEchoVerificationTest {
 
     private WechatCallbackController controller(WechatSignatureVerifier verifier) {
-        return new WechatCallbackController(verifier, null, null, null, null, null, null);
+        return new WechatCallbackController(verifier, null, null, null, null, null, null, null);
     }
 
     @Test

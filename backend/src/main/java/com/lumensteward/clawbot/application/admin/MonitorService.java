@@ -3,8 +3,10 @@ package com.lumensteward.clawbot.application.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.lumensteward.clawbot.common.enums.ToolStatus;
+import com.lumensteward.clawbot.infrastructure.persistence.entity.AnomalyEventEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.AuditLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.AnomalyEventMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.AuditLogMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
 import org.springframework.stereotype.Service;
@@ -20,7 +22,8 @@ import java.util.Map;
  * 会话与工具调用监控聚合（FR-17 / T4）与降级与拦截看板（A-3 / T5）。
  *
  * <p>本服务只做<b>只读聚合</b>（BR-23 监控页只读），不承载任何业务写入。全部指标均由
- * {@code wx_message}/{@code wx_user}/{@code log_tool_call}/{@code log_audit} 的
+ * {@code wx_message}/{@code wx_user}/{@code log_tool_call}/{@code log_audit}
+ * /{@code log_anomaly_event} 的
  * COUNT/SUM/AVG 聚合<b>直接产出</b>，可用等价 SQL 复核（AC-E5），<b>非估算</b>。
  *
  * <p><b>复用策略：</b>
@@ -69,6 +72,7 @@ public class MonitorService {
     private final ToolLogQueryService toolLogQueryService;
     private final ToolCallLogMapper toolCallLogMapper;
     private final AuditLogMapper auditLogMapper;
+    private final AnomalyEventMapper anomalyEventMapper;
 
     /**
      * 构造器注入（G-14）。
@@ -77,15 +81,18 @@ public class MonitorService {
      * @param toolLogQueryService 工具日志查询服务（复用）
      * @param toolCallLogMapper   工具日志 Mapper（缺口聚合）
      * @param auditLogMapper      审计日志 Mapper（幻觉拦截 / 泄漏计数）
+     * @param anomalyEventMapper  四层异常事件 Mapper（L1/L2 埋点，W1）
      */
     public MonitorService(DashboardService dashboardService,
                           ToolLogQueryService toolLogQueryService,
                           ToolCallLogMapper toolCallLogMapper,
-                          AuditLogMapper auditLogMapper) {
+                          AuditLogMapper auditLogMapper,
+                          AnomalyEventMapper anomalyEventMapper) {
         this.dashboardService = dashboardService;
         this.toolLogQueryService = toolLogQueryService;
         this.toolCallLogMapper = toolCallLogMapper;
         this.auditLogMapper = auditLogMapper;
+        this.anomalyEventMapper = anomalyEventMapper;
     }
 
     /**
@@ -226,9 +233,16 @@ public class MonitorService {
     /**
      * 四层异常分布（对齐 SRS 2.3.5）。
      *
-     * <p>来源：{@code log_tool_call.error_type} 分组后经 {@link #classifyLayer} 归并至 L1~L4。
-     * 当前工具日志记录的多为工具层（L3）错误码（如 {@code TOOL_FAILED}/{@code TOOL_NOT_FOUND}/
-     * {@code INVALID_ARGS}/{@code TOOL_TIMEOUT}）；映射对 L2 认知层与 L4 输出层错误码同样兼容，便于后续接入。
+     * <p>两个事实来源合并计数：
+     * <ul>
+     *   <li>{@code log_tool_call.error_type} 经 {@link #classifyLayer} 归并——工具层调用产生的异常，
+     *       映射对 L1/L2/L4 码同样兼容；</li>
+     *   <li>{@code log_anomaly_event.layer} <b>显式层次</b>直接入库（迭代 4 W1）——补齐此前
+     *       只有一行 WARN、看板恒为 0 的 <b>L1 接入层 / L2 认知层</b>。</li>
+     * </ul>
+     *
+     * <p>注：{@code log_anomaly_event} 的层次不靠错误码前缀推断，故 {@code MSG_DUPLICATED} 这类
+     * 无法被前缀启发式识别的 L1 码也能正确归层。
      *
      * @param start 下界（可空）
      * @param end   上界（可空）
@@ -253,6 +267,19 @@ public class MonitorService {
                 byLayer.merge(layer, toLong(row.get("total")), Long::sum);
             }
         }
+
+        QueryWrapper<AnomalyEventEntity> anomalyWrapper = new QueryWrapper<>();
+        anomalyWrapper.select("layer", "COUNT(*) AS total")
+                .isNotNull("layer")
+                .groupBy("layer");
+        applyTimeRange(anomalyWrapper, start, end);
+        for (Map<String, Object> row : anomalyEventMapper.selectMaps(anomalyWrapper)) {
+            String layer = toText(row.get("layer"));
+            if (layer != null && byLayer.containsKey(layer)) {
+                byLayer.merge(layer, toLong(row.get("total")), Long::sum);
+            }
+        }
+
         List<AnomalyLayer> result = new ArrayList<>();
         for (String layer : LAYER_ORDER) {
             result.add(new AnomalyLayer(layer, LAYER_LABELS.get(layer), byLayer.get(layer)));
@@ -276,7 +303,7 @@ public class MonitorService {
         return count == null ? 0L : count;
     }
 
-    private static void applyTimeRange(QueryWrapper<ToolCallLogEntity> wrapper,
+    private static void applyTimeRange(QueryWrapper<?> wrapper,
                                        LocalDateTime start, LocalDateTime end) {
         if (start != null) {
             wrapper.ge("created_at", start);

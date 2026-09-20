@@ -1,9 +1,13 @@
 package com.lumensteward.clawbot.interfaces.wechat;
 
+import com.lumensteward.clawbot.application.anomaly.AnomalyNotice;
 import com.lumensteward.clawbot.application.dispatcher.MessageDispatcher;
 import com.lumensteward.clawbot.application.fallback.FallbackReason;
 import com.lumensteward.clawbot.application.fallback.FallbackService;
 import com.lumensteward.clawbot.application.wechat.WechatMessageService;
+import com.lumensteward.clawbot.common.enums.AnomalyLayer;
+import com.lumensteward.clawbot.common.exception.SignatureInvalidException;
+import com.lumensteward.clawbot.common.exception.TimestampOutOfWindowException;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.infrastructure.cache.DedupService;
 import com.lumensteward.clawbot.infrastructure.cache.RateLimitDecision;
@@ -12,6 +16,7 @@ import com.lumensteward.clawbot.infrastructure.client.wechat.WechatMessageParser
 import com.lumensteward.clawbot.infrastructure.client.wechat.WechatSignatureVerifier;
 import com.lumensteward.clawbot.infrastructure.client.wechat.model.InternalMessage;
 import com.lumensteward.clawbot.infrastructure.observability.TraceContext;
+import com.lumensteward.clawbot.infrastructure.persistence.service.AnomalyEventService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +73,11 @@ public class WechatCallbackController {
     private final MessageDispatcher messageDispatcher;
     private final WechatMessageService wechatMessageService;
     private final FallbackService fallbackService;
+    /** 四层异常埋点写入（可为 null，兼容独立构造的单测）。 */
+    private final AnomalyEventService anomalyEventService;
+
+    /** 埋点来源标识（落 {@code log_anomaly_event.source}）。 */
+    private static final String ANOMALY_SOURCE = "wechat.callback";
 
     /** 有界分发线程池（daemon），用于「后推送」阶段的链路执行（AC-A8）。 */
     private final ExecutorService pipelineExecutor;
@@ -82,6 +92,7 @@ public class WechatCallbackController {
      * @param messageDispatcher  类型路由分发
      * @param wechatMessageService 消息服务（落库 + 回执 + 客服消息推送）
      * @param fallbackService    兜底文案
+     * @param anomalyEventService 四层异常埋点（可为 null）
      */
     public WechatCallbackController(WechatSignatureVerifier signatureVerifier,
                                     WechatMessageParser messageParser,
@@ -89,7 +100,8 @@ public class WechatCallbackController {
                                     RateLimitService rateLimitService,
                                     MessageDispatcher messageDispatcher,
                                     WechatMessageService wechatMessageService,
-                                    FallbackService fallbackService) {
+                                    FallbackService fallbackService,
+                                    AnomalyEventService anomalyEventService) {
         this.signatureVerifier = signatureVerifier;
         this.messageParser = messageParser;
         this.dedupService = dedupService;
@@ -97,6 +109,7 @@ public class WechatCallbackController {
         this.messageDispatcher = messageDispatcher;
         this.wechatMessageService = wechatMessageService;
         this.fallbackService = fallbackService;
+        this.anomalyEventService = anomalyEventService;
         this.pipelineExecutor = newPipelineExecutor();
     }
 
@@ -134,7 +147,7 @@ public class WechatCallbackController {
                          @RequestParam("nonce") String nonce,
                          @RequestParam("echostr") String echostr) {
         // 与 POST 复用同一段验签代码（BR-01）
-        signatureVerifier.verify(signature, timestamp, nonce, null);
+        verifySignatureOrRecord(signature, timestamp, nonce);
         log.debug("微信回调 GET 验签通过，回显 echostr");
         return echostr;
     }
@@ -158,15 +171,16 @@ public class WechatCallbackController {
                           @RequestParam(value = "encrypt_type", required = false) String encryptType,
                           @RequestBody(required = false) String body,
                           HttpServletRequest request) {
-        signatureVerifier.verify(signature, timestamp, nonce, null);
+        verifySignatureOrRecord(signature, timestamp, nonce);
 
         InternalMessage message = messageParser.parse(body, request.getParameter("msg_type"));
         log.info("微信回调进入处理 msgType={} openid={}",
                 message.msgType(), MaskUtils.openid(message.openid()));
 
-        // L1 幂等去重：同 MsgId 10 次仅处理 1 次（AC-A3）
+        // L1 幂等去重：同 MsgId 10 次仅处理 1 次（AC-A3）；重复本身按 SRS 2.3.5 记为 L1 接入层异常
         if (!dedupService.markIfAbsent(message.msgId())) {
             log.info("重复消息幂等丢弃 msgId={}", message.msgId());
+            recordAnomaly("MSG_DUPLICATED", message.openid(), "msgId=" + message.msgId());
             return fallbackService.render(FallbackReason.MSG_DUPLICATED, Map.of());
         }
 
@@ -271,6 +285,37 @@ public class WechatCallbackController {
             log.error("异步终态推送异常 openid={} err={}",
                     MaskUtils.openid(message == null ? null : message.openid()), e.getMessage(), e);
         }
+    }
+
+    /**
+     * 验签并把 L1 接入层异常落成可查事实（SRS 2.3.5 L1：签名不一致 / 时间戳越界）。
+     *
+     * <p>GET 与 POST 复用本方法，Mock 与真实通道同源，故埋点亦覆盖两通道；异常<b>原样抛出</b>，
+     * 仍由 {@code GlobalExceptionHandler} 映射为带 HTTP 语义的响应（不 500）。
+     *
+     * @param signature 平台签名
+     * @param timestamp 时间戳
+     * @param nonce     随机串
+     */
+    private void verifySignatureOrRecord(String signature, String timestamp, String nonce) {
+        try {
+            signatureVerifier.verify(signature, timestamp, nonce, null);
+        } catch (SignatureInvalidException e) {
+            recordAnomaly("SIGNATURE_INVALID", null, e.getMessage());
+            throw e;
+        } catch (TimestampOutOfWindowException e) {
+            recordAnomaly("TIMESTAMP_OUT_OF_WINDOW", null, e.getMessage());
+            throw e;
+        }
+    }
+
+    /** 落一条 L1 埋点；未注入写服务（独立构造的单测）时静默跳过。 */
+    private void recordAnomaly(String errorCode, String openid, String detail) {
+        if (anomalyEventService == null) {
+            return;
+        }
+        anomalyEventService.record(new AnomalyNotice(
+                AnomalyLayer.L1, errorCode, ANOMALY_SOURCE, openid, detail));
     }
 
     private static String clientIp(HttpServletRequest request) {

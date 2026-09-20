@@ -111,7 +111,7 @@ class MainChainWiringVerificationTest {
         when(rateLimit.tryAcquire(any(), any())).thenReturn(RateLimitDecision.ALLOWED);
 
         WechatCallbackController controller = new WechatCallbackController(verifier, parser, dedup, rateLimit,
-                dispatcher, messageService, new DefaultFallbackService());
+                dispatcher, messageService, new DefaultFallbackService(), null);
 
         // 真实签名 + 真实报文（单一入口：Mock/Real 共用同一段验签）
         String timestamp = WechatSignatureGenerator.nowTimestamp();

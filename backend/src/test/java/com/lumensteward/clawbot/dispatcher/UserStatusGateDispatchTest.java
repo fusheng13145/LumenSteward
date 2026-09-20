@@ -34,7 +34,7 @@ class UserStatusGateDispatchTest {
         when(gate.isBlocked("openid-1")).thenReturn(true);
         when(handler.supportsMsgType()).thenReturn("text");
         MessageDispatcher dispatcher =
-                new MessageDispatcher(List.of(handler), gate, new DefaultFallbackService());
+                new MessageDispatcher(List.of(handler), gate, new DefaultFallbackService(), null);
 
         String reply = dispatcher.dispatch(message("openid-1"));
 
@@ -49,7 +49,7 @@ class UserStatusGateDispatchTest {
         when(handler.supportsMsgType()).thenReturn("text");
         when(handler.handle(any())).thenReturn("已帮你查询");
         MessageDispatcher dispatcher =
-                new MessageDispatcher(List.of(handler), gate, new DefaultFallbackService());
+                new MessageDispatcher(List.of(handler), gate, new DefaultFallbackService(), null);
 
         assertThat(dispatcher.dispatch(message("openid-2"))).isEqualTo("已帮你查询");
         verify(handler).handle(any());

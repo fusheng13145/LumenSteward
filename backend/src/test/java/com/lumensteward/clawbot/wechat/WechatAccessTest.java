@@ -76,7 +76,7 @@ class WechatAccessTest {
                 new WechatReplyBuilderImpl(properties), null);
 
         controller = new WechatCallbackController(verifier, parser, dedupService, new AllowAllRateLimit(),
-                dispatcher, messageService, new DefaultFallbackService());
+                dispatcher, messageService, new DefaultFallbackService(), null);
     }
 
     @Test

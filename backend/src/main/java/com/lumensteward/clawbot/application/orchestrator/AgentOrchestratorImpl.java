@@ -1,6 +1,7 @@
 package com.lumensteward.clawbot.application.orchestrator;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lumensteward.clawbot.application.anomaly.AnomalyNotice;
 import com.lumensteward.clawbot.application.config.ConfigKeys;
 import com.lumensteward.clawbot.application.config.DynamicConfigService;
 import com.lumensteward.clawbot.application.context.ContextTrimmer;
@@ -20,6 +21,7 @@ import com.lumensteward.clawbot.application.safety.ConsistencyVerdict;
 import com.lumensteward.clawbot.application.safety.ContentSafetyService;
 import com.lumensteward.clawbot.application.safety.RuleBasedConsistencyChecker;
 import com.lumensteward.clawbot.application.safety.SafetyVerdict;
+import com.lumensteward.clawbot.common.enums.AnomalyLayer;
 import com.lumensteward.clawbot.common.enums.SessionState;
 import com.lumensteward.clawbot.common.enums.ToolStatus;
 import com.lumensteward.clawbot.common.util.JsonUtils;
@@ -349,6 +351,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             } catch (LlmException e) {
                 FallbackReason reason = mapLlmReason(e);
                 log.warn("LLM 调用失败，走降级: errType={} reason={}", e.errorType(), reason);
+                publishAnomaly(e.errorType(), openid, "round=" + round);
                 trace.recordLlm(round, llmStartNanos, OrchestrationSpan.SpanStatus.FAIL);
                 return fallback(request, reason, executed, llmCalls, round, trace);
             }
@@ -388,6 +391,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                 llmCalls++;
             } catch (LlmException e) {
                 log.warn("强制收敛调用失败: errType={}", e.errorType());
+                publishAnomaly(e.errorType(), openid, "forced_convergence");
                 trace.recordLlm(round, convStartNanos, OrchestrationSpan.SpanStatus.FAIL);
                 return fallback(request, FallbackReason.FORCED_CONVERGENCE, executed, llmCalls, round, trace);
             }
@@ -685,6 +689,29 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             }
         }
         return false;
+    }
+
+    /**
+     * 发布 L2 认知层异常事件（SRS 2.3.5 / 迭代 4 W1）。
+     *
+     * <p>此前 L2 异常只有一行 WARN 日志，A-3 四层分布因此在 L2 恒为 0；改为发布
+     * {@link AnomalyNotice} 由 {@code AnomalyNoticeListener} 落 {@code log_anomaly_event}，
+     * 编排器无需新增构造器依赖。与 {@link #publishConsole} 同纪律：观测副作用绝不影响主链路。
+     *
+     * @param errorCode LLM 异常码（{@code LlmException#errorType()}）
+     * @param openid    用户标识（原始值，脱敏由落库侧统一完成）
+     * @param detail    摘要（轮次等，不含 PII）
+     */
+    private void publishAnomaly(String errorCode, String openid, String detail) {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(new AnomalyNotice(
+                    AnomalyLayer.L2, errorCode, "orchestrator", openid, detail));
+        } catch (Exception e) {
+            log.warn("发布 AnomalyNotice 失败 code={} openid={}", errorCode, MaskUtils.openid(openid));
+        }
     }
 
     /**

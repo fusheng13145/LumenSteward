@@ -87,7 +87,7 @@ class AsyncReceiptContractVerificationTest {
         WechatMessageService messageService = new WechatMessageService(
                 transport, repository, replyBuilder, sessionMapper);
         WechatCallbackController controller = new WechatCallbackController(
-                verifier, parser, dedup, rateLimit, dispatcher, messageService, fallback);
+                verifier, parser, dedup, rateLimit, dispatcher, messageService, fallback, null);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("127.0.0.1");
