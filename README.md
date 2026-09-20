@@ -1,13 +1,13 @@
 # LumenSteward · 衔光管家
 
-> 微信 Claw 助手（LumenSteward）MVP · 分层单体（Modular Monolith，ADR-001）
+> 微信 Claw 助手（LumenSteward）· 分层单体（Modular Monolith，ADR-001）
 
 前后端分离 + 分层单体。后端严格遵循 SRS 9.2 五层包结构
 `interfaces → application → domain → infrastructure → common`，依赖方向自上而下单向。
 
 - 需求基线：`微信Claw助手需求规格说明书.md`（SRS-CLAWBOT-002 V2.2，只读）
-- 产品需求：`docs/MVP产品需求文档.md`（PRD）
-- 架构设计与任务分解：`docs/MVP架构设计与任务分解.md`
+- **项目手册（唯一工程文档）**：`docs/衔光管家项目手册.md` —— 功能说明 / 架构 / 部署 / 迭代交付证据 / 迭代 4 规划
+- 当前进度：**迭代 1 / 2 / 3 已全部交付**（后端 355 测试全绿，真实 `java -jar` 冷启动通过）
 
 ---
 
@@ -26,7 +26,7 @@
 ├── frontend/                # Vue 3 + TS + Vite 管理后台
 │   └── src/                 # router / config / stores / utils / services / directives / layouts / views
 ├── scripts/                 # e2e-smoke.ps1 端到端走查脚本
-├── docs/                    # PRD / 架构设计 / 验收证据索引（evidence/index.md）
+├── docs/                    # 项目手册（唯一工程文档：功能 / 架构 / 部署 / 迭代证据 / 规划）
 ├── .github/workflows/ci.yml # CI 门禁（构建 / 单测 / 类型检查 / 依赖扫描）
 ├── docker-compose.yml       # MySQL 8 + Redis 7 + 后端 + 前端
 └── .env.example             # 后端环境变量契约（真实 .env 不入库）
@@ -61,9 +61,9 @@
 | spring-boot-starter-test / spring-security-test | 3.3.4 | JUnit5 + Mockito + AssertJ | 启用（test） |
 | testcontainers（junit-jupiter/mysql） | 1.20.3 | 集成测试基座 | 启用（test） |
 | dependency-check-maven | 10.0.4 | 依赖漏洞扫描 | 启用（CI 显式调用） |
-| shedlock-spring | 5.16.0 | 定时任务分布式锁 | **预留未启用**（迭代 3） |
+| shedlock-spring | 5.16.0 | 定时任务分布式锁 | **预留未启用**（FR-19 清理用 `@Scheduled`，未引入分布式锁） |
 | spring-boot-starter-amqp | 3.3.4 | RabbitMQ 长任务解耦 | **预留未启用** |
-| spring-boot-starter-webflux | 3.3.4 | SSE 实时通道 | **预留未启用**（迭代 3） |
+| spring-boot-starter-webflux | 3.3.4 | SSE 实时通道 | **预留未启用**（FR-08 已用 Spring MVC `SseEmitter` 实现，未引入 WebFlux） |
 | h2 | 2.2.224 | 内嵌开发/测试库 | **预留未启用** |
 
 ### 2.2 前端（`frontend/package.json`，Vue 3 + TS + Vite）
@@ -78,7 +78,7 @@
 | typescript（`strict: true`）/ vue-tsc | ^5.5 / ^2.1 | 类型安全 / `tsc --noEmit` 门禁 | 启用 |
 | eslint / prettier | ^9 / ^3.3 | 代码规范 | 启用 |
 | vitest / @vue/test-utils | ^2.0 / ^2.4 | 前端单测 | 启用 |
-| echarts | ^5.5.1 | 统计图表 | **预留未启用**（PRD N-8 / Q11） |
+| echarts | ^5.6.0 | 统计图表 | 启用（迭代 3：监控看板 / 超时瀑布图） |
 
 ---
 
@@ -160,17 +160,24 @@ pwsh -File scripts/e2e-smoke.ps1 -WxToken clawbot-local-token -AdminPassword <AD
 
 | 作业 | 内容 | 固定版本 |
 | --- | --- | --- |
-| 后端 · 构建 + 单测 | `mvn clean verify` | Java 17 / Maven 3.9 |
-| 前端 · 类型检查 + 构建 | `vue-tsc --noEmit` + `vite build` | Node 20 |
+| 后端 · 构建 + 单测 + 质量门禁 | `mvn clean verify`（含 JaCoCo 覆盖率、Checkstyle、SpotBugs 门禁） | Java 17 / Maven 3.9 |
+| 前端 · 规范 + 测试 + 类型 + 构建 | `npm run lint`（`--max-warnings 0`）+ `npm test`（Vitest）+ `vue-tsc --noEmit` + `vite build` | Node 20 |
 | 依赖漏洞扫描 | `dependency-check-maven:check`（CVSS ≥ 7 阻断）+ `npm audit --audit-level=high` | Java 17 / Node 20 |
 
 四个环节（构建 / 单测 / 类型检查 / 依赖扫描）**任一失败即阻断合并**（AC-F2）。
 
 ---
 
-## 6 本期实现范围说明
+## 6 实现范围与进度
 
-按架构文档 §7 任务分解推进，MVP 全量任务（T01~T05）已完成编码：
+| 迭代 | 主题 | 状态 |
+| --- | --- | --- |
+| 迭代 1（MVP） | 打通主链路 + 工程门禁 | ✅ 已交付（e2e 8 PASS） |
+| 迭代 2（M 波 + S 波） | 五能力齐备 + 反幻觉基础版 + 配置热生效 / 回放台 / 多模型路由 | ✅ 已交付（281 测试） |
+| 迭代 3（Wave 1 + Wave 2） | 可运营 + 质量度量：FR-19/20、FR-08、FR-17、FR-24 + A-3/A-4/A-5 | ✅ 已交付（355 测试） |
+| 迭代 4 | 可演进 + 合规自证（FR-22/23、FR-09 完整版、B-3~B-5）与三层执行体 | ⏳ 规划中 |
+
+迭代 1 覆盖 T01~T05 全量任务：
 
 - **T01 工程骨架与门禁**：统一契约层（`ApiResponse` / `ErrorCode` / `PageResult`）、全局异常、
   `traceId` 横切、MyBatis-Plus 分页与审计填充、Redis/HTTP/OpenAPI 配置、前端骨架与 axios 三段式、CI、容器编排。
@@ -180,8 +187,10 @@ pwsh -File scripts/e2e-smoke.ps1 -WxToken clawbot-local-token -AdminPassword <AD
 - **T04 对话引擎与输出治理**：Agent Loop（SC-01~SC-05 硬约束 + 强制收敛）、上下文裁剪（保持 tool/assistant 配对）、
   执行一致性校验（防幻觉，整条 DETECTED）、内容安全本地词库 **Fail-Closed**、兜底矩阵、真实工具 `manage_pet_profile`。
 - **T05 管理后台与前端**：JWT + RBAC 三角色（401/403 严格）、登录失败锁定、登出黑名单、看板/工具日志/只读页、
-  统一脱敏 `MaskingAssembler`、前端路由守卫/权限指令/Pinia、端到端走查脚本、验收证据索引。
+  统一脱敏 `MaskingAssembler`、前端路由守卫/权限指令/Pinia、端到端走查脚本。
 
-**未启用技术栈**（ECharts、ShedLock、AMQP、WebFlux、H2）见第 2 节，均为**预留未启用**。
+迭代 2 起的增量交付内容（含迭代 3 收尾的 FR-08 流式观测 / FR-17 监控 / FR-24 任务会话 / A-3 看板 / A-4 留痕 / A-5 瀑布图）见项目手册第 7 章。
 
-**验收证据**：见 `docs/evidence/index.md`（按 G-31 逐条列出证据类型与获取方式，未取得证据项如实标注）。
+**未启用技术栈**（ShedLock、AMQP、WebFlux、H2）见第 2 节，均为**预留未启用**。
+
+**交付证据与完整验收结论**：见 `docs/衔光管家项目手册.md` 第 7 章（含质量门禁输出、真实冷启动验收、逐需求验收映射与已知口径局限）。
