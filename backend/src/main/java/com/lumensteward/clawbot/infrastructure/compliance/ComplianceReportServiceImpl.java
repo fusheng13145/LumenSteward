@@ -12,6 +12,7 @@ import com.lumensteward.clawbot.infrastructure.persistence.entity.RateLimitLogEn
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxUserEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.AuditLogMapper;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.MemoryItemMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.OrchestrationTraceMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.RateLimitLogMapper;
@@ -63,6 +64,7 @@ public class ComplianceReportServiceImpl implements ComplianceReportService {
     private final WxMessageMapper wxMessageMapper;
     private final WxSessionMapper wxSessionMapper;
     private final PetProfileMapper petProfileMapper;
+    private final MemoryItemMapper memoryItemMapper;
     private final WxUserMapper wxUserMapper;
 
     /**
@@ -75,6 +77,7 @@ public class ComplianceReportServiceImpl implements ComplianceReportService {
      * @param wxMessageMapper          消息 Mapper
      * @param wxSessionMapper          会话 Mapper
      * @param petProfileMapper         宠物档案 Mapper
+     * @param memoryItemMapper         个人状态库 Mapper（W6 新增 PII 载体，须出现在基数中）
      * @param wxUserMapper             用户 Mapper
      */
     public ComplianceReportServiceImpl(AuditLogMapper auditLogMapper,
@@ -84,6 +87,7 @@ public class ComplianceReportServiceImpl implements ComplianceReportService {
                                       WxMessageMapper wxMessageMapper,
                                       WxSessionMapper wxSessionMapper,
                                       PetProfileMapper petProfileMapper,
+                                      MemoryItemMapper memoryItemMapper,
                                       WxUserMapper wxUserMapper) {
         this.auditLogMapper = auditLogMapper;
         this.toolLogMapper = toolLogMapper;
@@ -92,6 +96,7 @@ public class ComplianceReportServiceImpl implements ComplianceReportService {
         this.wxMessageMapper = wxMessageMapper;
         this.wxSessionMapper = wxSessionMapper;
         this.petProfileMapper = petProfileMapper;
+        this.memoryItemMapper = memoryItemMapper;
         this.wxUserMapper = wxUserMapper;
     }
 
@@ -116,12 +121,14 @@ public class ComplianceReportServiceImpl implements ComplianceReportService {
                 DataRetentionService.MESSAGE_RETENTION_DAYS,
                 DataRetentionService.TOOL_LOG_RETENTION_DAYS,
                 DataRetentionService.PET_SOFT_DELETE_GRACE_DAYS,
+                DataRetentionService.MEMORY_HISTORY_RETENTION_DAYS,
                 "0 0 3 * * ?",
                 "每日 03:00 由 DataRetentionServiceImpl.purgeAll() 执行；仅记录 INFO 日志，不持久化执行表",
                 count(wxMessageMapper),
                 count(wxSessionMapper),
                 count(toolLogMapper),
-                count(petProfileMapper));
+                count(petProfileMapper),
+                count(memoryItemMapper));
     }
 
     /** 二、删除与匿名化执行（FR-19 ②）。 */
@@ -217,8 +224,8 @@ public class ComplianceReportServiceImpl implements ComplianceReportService {
     private String buildStatement() {
         return "本合规报告由系统自动生成，用于数据留存与删除执行的自证。报告所列全部数据均来源于既有日志与"
                 + "业务表（log_audit / log_tool_call / log_rate_limit / log_orchestration_trace / wx_message / "
-                + "wx_session / biz_pet_profile / wx_user），未引入任何新的数据采集；所有 openid 类个人标识"
-                + "已按 BR-21 统一脱敏。";
+                + "wx_session / biz_pet_profile / biz_memory_item / wx_user），未引入任何新的数据采集；"
+                + "所有 openid 类个人标识已按 BR-21 统一脱敏。";
     }
 
     // ===== 通用统计辅助 =====
@@ -240,7 +247,8 @@ public class ComplianceReportServiceImpl implements ComplianceReportService {
             return result;
         }
         for (T row : rows) {
-            String key = keyExtractor.apply(row);
+            // 只投影可空列时，MyBatis 会把「整行皆为 NULL」映射成 null 元素（如无 error_type 的成功调用）
+            String key = row == null ? null : keyExtractor.apply(row);
             result.merge(key == null ? "(空)" : key, 1L, Long::sum);
         }
         return result;

@@ -76,13 +76,15 @@ public class ComplianceReportAssembler {
         md.append("- 消息保留天数：").append(r.messageRetentionDays()).append(" 天\n");
         md.append("- 工具日志保留天数：").append(r.toolLogRetentionDays()).append(" 天\n");
         md.append("- 软删档案物理清除宽限期：").append(r.petSoftDeleteGraceDays()).append(" 天\n");
+        md.append("- 状态库已覆盖历史保留天数：").append(r.memoryHistoryRetentionDays()).append(" 天\n");
         md.append("- 定时清理计划：").append(r.nextRunDescription())
                 .append("（cron `").append(r.nextRunCron()).append("`）\n");
         md.append("- 当前基数（保留数据源）：\n");
         md.append("  - `wx_message`：").append(r.wxMessageCount()).append(" 行\n");
         md.append("  - `wx_session`：").append(r.wxSessionCount()).append(" 行\n");
         md.append("  - `log_tool_call`：").append(r.toolLogCount()).append(" 行\n");
-        md.append("  - `biz_pet_profile`：").append(r.petProfileCount()).append(" 行\n\n");
+        md.append("  - `biz_pet_profile`：").append(r.petProfileCount()).append(" 行\n");
+        md.append("  - `biz_memory_item`：").append(r.memoryItemCount()).append(" 行（含生效与已覆盖历史）\n\n");
     }
 
     private void appendDeletion(StringBuilder md, ComplianceReportVO vo) {

@@ -12,6 +12,8 @@ import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationResu
 import com.lumensteward.clawbot.application.orchestrator.model.OrchestrationSpan;
 import com.lumensteward.clawbot.application.console.ConsoleEvent;
 import com.lumensteward.clawbot.application.console.ConsoleEventType;
+import com.lumensteward.clawbot.application.memory.MemoryGrowthNotice;
+import com.lumensteward.clawbot.application.memory.MemoryRecallService;
 import com.lumensteward.clawbot.application.orchestrator.model.ToolCallRecord;
 import com.lumensteward.clawbot.application.ratelimit.CostBudgetService;
 import com.lumensteward.clawbot.application.task.SlotFillOutcome;
@@ -105,6 +107,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final AuditLogService auditLogService;
     /** 任务型多步会话服务（FR-24 / T8；可为 null，此时退化为无跨轮任务记忆）。 */
     private final TaskSessionService taskSessionService;
+    /** 个人状态库召回服务（W6 / §2.19；可为 null，此时本轮不注入长期记忆）。 */
+    private final MemoryRecallService memoryRecallService;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -135,6 +139,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param eventPublisher        应用事件发布器（实时观测台事件）
      * @param auditLogService       审计日志服务（执行性幻觉拦截留痕，A-3 / T5；可为 null）
      * @param taskSessionService    任务型多步会话服务（FR-24 / T8；可为 null）
+     * @param memoryRecallService   个人状态库召回服务（W6 / §2.19；可为 null，此时不注入长期记忆）
      */
     @Autowired
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
@@ -150,7 +155,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  MessageLengthGuard messageLengthGuard,
                                  ApplicationEventPublisher eventPublisher,
                                  AuditLogService auditLogService,
-                                 TaskSessionService taskSessionService) {
+                                 TaskSessionService taskSessionService,
+                                 MemoryRecallService memoryRecallService) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -167,6 +173,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.eventPublisher = eventPublisher;
         this.auditLogService = auditLogService;
         this.taskSessionService = taskSessionService;
+        this.memoryRecallService = memoryRecallService;
     }
 
     /**
@@ -204,7 +211,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
                 contentSafetyService, fallbackService, toolCallLogService,
                 orchestrationProperties, llmProperties, dynamicConfig, costBudgetService,
-                messageLengthGuard, eventPublisher, auditLogService, null);
+                messageLengthGuard, eventPublisher, auditLogService, null, null);
     }
 
     /**
@@ -332,6 +339,11 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(ChatMessage.system(SYSTEM_PROMPT));
+        // W6 / §2.19：注入该用户的跨会话长期记忆（fail-open，读不到即本轮无背景知识）
+        String memoryBlock = memoryRecallService == null ? null : memoryRecallService.buildRecallBlock(openid);
+        if (memoryBlock != null) {
+            messages.add(ChatMessage.system(memoryBlock));
+        }
         messages.addAll(trimmed);
         // FR-24：槽位齐备续接执行时，向模型注入已确认参数提示（不改变工具契约）
         if (taskResumeHint != null) {
@@ -447,6 +459,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         publishConsole(ConsoleEventType.DONE, traceId, openid, sessionId, round, null, null, null);
         // 链路结束：发布时序追踪事件（A-5 / T6，best-effort，落库失败不影响主链路）
         trace.publish(eventPublisher, log, round);
+        // 链路结束：发布对话活动供个人状态库生长（W6，best-effort + 默认关闭，见 MemoryGrowthListener）
+        publishMemoryGrowth(openid, sessionId, traceId, userMessage, reply);
 
         // ===== FR-24：本轮因缺必填参数暂停（追问）时建立任务，以承接用户后续补充 =====
         if (taskSessionService != null && sessionId != null) {
@@ -744,6 +758,31 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
     private String effectiveModel() {
         return dynamicString(ConfigKeys.LLM_MODEL, llmProperties.model());
+    }
+
+    /**
+     * 发布本轮对话活动，供个人状态库异步生长（W6 / §2.19）。
+     *
+     * <p>仅在<b>回复已成功送达治理链之后</b>发布：降级回复是兜底文案，对其做抽取只会产出噪声。
+     * 发布失败不影响本轮回复（与 {@code ConsoleEvent} 同一 best-effort 口径）。
+     *
+     * @param openid         用户标识（原始值，下游脱敏）
+     * @param sessionId      会话 id（溯源）
+     * @param traceId        链路标识（溯源）
+     * @param userMessage    用户本轮原文
+     * @param assistantReply 本轮终态回复
+     */
+    private void publishMemoryGrowth(String openid, Long sessionId, String traceId,
+                                    String userMessage, String assistantReply) {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(new MemoryGrowthNotice(
+                    openid, sessionId, traceId, userMessage, assistantReply));
+        } catch (RuntimeException e) {
+            log.warn("发布状态库生长事件失败（忽略） traceId={} err={}", traceId, e.getMessage());
+        }
     }
 
     /**

@@ -112,7 +112,7 @@ class TaskSessionOrchestrationIntegrationTest {
         return new AgentOrchestratorImpl(llm, registry, new InMemoryContextStore(),
                 new ContextTrimmer(new HeuristicTokenEstimator()), PASS_CHECKER, PASS_SAFETY,
                 new DefaultFallbackService(), new NoOpToolCallLogService(),
-                orchestration, llmProperties, null, null, null, null, null, taskService);
+                orchestration, llmProperties, null, null, null, null, null, taskService, null);
     }
 
     private static final ConsistencyChecker PASS_CHECKER = (reply, executed) -> ConsistencyVerdict.pass();

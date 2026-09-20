@@ -5,6 +5,7 @@ import com.lumensteward.clawbot.application.retention.DataRetentionService;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxMessageEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxSessionEntity;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.MemoryItemMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.WxMessageMapper;
@@ -20,7 +21,9 @@ import java.time.LocalDateTime;
  * {@link DataRetentionService} 实现（FR-19 ①）。
  *
  * <p>每日凌晨 03:00 执行（cron 秒 分 时 ...）：超出保留期的消息/会话/工具日志删除，
- * 软删超过 {@code PET_SOFT_DELETE_GRACE_DAYS} 天的宠物档案物理清除。
+ * 软删超过 {@code PET_SOFT_DELETE_GRACE_DAYS} 天的宠物档案物理清除，
+ * 覆盖超过 {@code MEMORY_HISTORY_RETENTION_DAYS} 天的状态库历史条目物理清除
+ * （生效事实不自动清除，见 {@link DataRetentionService#MEMORY_HISTORY_RETENTION_DAYS}）。
  * 各子任务独立 try/catch，单任务失败不影响其余（BR-27 删除优先但须可证明）。
  */
 @Service
@@ -32,6 +35,7 @@ public class DataRetentionServiceImpl implements DataRetentionService {
     private final WxSessionMapper sessionMapper;
     private final ToolCallLogMapper toolLogMapper;
     private final PetProfileMapper petProfileMapper;
+    private final MemoryItemMapper memoryItemMapper;
 
     /**
      * 构造器注入（G-14）。
@@ -40,13 +44,16 @@ public class DataRetentionServiceImpl implements DataRetentionService {
      * @param sessionMapper     会话 Mapper
      * @param toolLogMapper     工具日志 Mapper
      * @param petProfileMapper  宠物档案 Mapper
+     * @param memoryItemMapper  个人状态库 Mapper（W6：仅清理已覆盖历史）
      */
     public DataRetentionServiceImpl(WxMessageMapper messageMapper, WxSessionMapper sessionMapper,
-                                   ToolCallLogMapper toolLogMapper, PetProfileMapper petProfileMapper) {
+                                   ToolCallLogMapper toolLogMapper, PetProfileMapper petProfileMapper,
+                                   MemoryItemMapper memoryItemMapper) {
         this.messageMapper = messageMapper;
         this.sessionMapper = sessionMapper;
         this.toolLogMapper = toolLogMapper;
         this.petProfileMapper = petProfileMapper;
+        this.memoryItemMapper = memoryItemMapper;
     }
 
     @Override
@@ -57,8 +64,10 @@ public class DataRetentionServiceImpl implements DataRetentionService {
         int sessions = safe(() -> purgeExpiredSessions(now.minusDays(MESSAGE_RETENTION_DAYS)), "会话");
         int toolLogs = safe(() -> purgeExpiredToolLogs(now.minusDays(TOOL_LOG_RETENTION_DAYS)), "工具日志");
         int pets = safe(() -> purgePhysicallyDeletedPets(now.minusDays(PET_SOFT_DELETE_GRACE_DAYS)), "软删档案");
-        log.info("数据保留定时清理完成 messages={} sessions={} toolLogs={} pets={}",
-                messages, sessions, toolLogs, pets);
+        int memoryHistory = safe(() -> purgeSupersededMemories(
+                now.minusDays(MEMORY_HISTORY_RETENTION_DAYS)), "状态库历史");
+        log.info("数据保留定时清理完成 messages={} sessions={} toolLogs={} pets={} memoryHistory={}",
+                messages, sessions, toolLogs, pets, memoryHistory);
     }
 
     @Override
@@ -81,6 +90,15 @@ public class DataRetentionServiceImpl implements DataRetentionService {
     @Override
     public int purgePhysicallyDeletedPets(LocalDateTime cutoff) {
         return petProfileMapper.deletePhysicallyDeletedBefore(cutoff);
+    }
+
+    @Override
+    public int purgeSupersededMemories(LocalDateTime cutoff) {
+        // 物理删除走裸 SQL：cutoff 为空时条件退化为三值逻辑，删除范围不可证明，故直接不动库
+        if (cutoff == null) {
+            return 0;
+        }
+        return memoryItemMapper.deleteSupersededBefore(cutoff);
     }
 
     private int safe(java.util.function.IntSupplier action, String label) {

@@ -69,6 +69,21 @@ public final class ConfigKeys {
     /** 单条消息最大字符数（FR-20 ④，默认 2000）。 */
     public static final String RATE_LIMIT_MAX_MESSAGE_LENGTH = "rate_limit.max_message_length";
 
+    /** 个人状态库自动生长开关（W6，默认 false：每条消息额外调用模型，有成本）。 */
+    public static final String MEMORY_GROWTH_ENABLED = "memory.growth.enabled";
+
+    /** 单次对话最多落库的事实条数（W6，防噪声写入）。 */
+    public static final String MEMORY_GROWTH_MAX_ITEMS = "memory.growth.max-items";
+
+    /** 个人状态库召回注入开关（W6，默认 true）。 */
+    public static final String MEMORY_RECALL_ENABLED = "memory.recall.enabled";
+
+    /** 召回注入最大条数（W6，防上下文挤占）。 */
+    public static final String MEMORY_RECALL_MAX_ITEMS = "memory.recall.max-items";
+
+    /** 召回注入最大字符数（W6，防上下文挤占）。 */
+    public static final String MEMORY_RECALL_MAX_CHARS = "memory.recall.max-chars";
+
     private ConfigKeys() {
     }
 }

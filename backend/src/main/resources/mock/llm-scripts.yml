@@ -8,6 +8,15 @@ defaultContent: "（Mock）我在呢，随时听你说～"
 defaultFinishReason: stop
 
 rules:
+  # ---- 个人状态库生长（W6）：抽取器请求的载荷以【记忆抽取】开头，必须置于首位 ----
+  # 置于首位的原因：载荷内嵌用户原文，若排在后面会被 pet-create-toolcall 等
+  # 关键词规则（如「叫」）抢先命中，导致抽取拿到的不是 JSON。
+  - name: memory-extract
+    round: 0
+    match: "【记忆抽取】"
+    finishReason: stop
+    content: '{"items":[{"kind":"PERSON","name":"妈妈","content":"住在北京，喜欢喝绿茶","confidence":0.8},{"kind":"PREFERENCE","name":"饮品","content":"偏好无糖茶饮","confidence":0.7}]}'
+
   # ---- 宠物档案：本轮发起工具调用（第 0 轮） ----
   - name: pet-create-toolcall
     round: 0

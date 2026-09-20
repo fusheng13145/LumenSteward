@@ -12,6 +12,7 @@ import com.lumensteward.clawbot.infrastructure.persistence.entity.RateLimitLogEn
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxUserEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.AuditLogMapper;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.MemoryItemMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.OrchestrationTraceMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.RateLimitLogMapper;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +39,7 @@ import static org.mockito.Mockito.when;
 /**
  * 合规报告聚合单测（B-5 / W4）。
  *
- * <p>以 Mockito 桩替代 8 个 Mapper，断言各分节计数正确、删除按范围聚合、匿名化计数被采集，
+ * <p>以 Mockito 桩替代 9 个 Mapper，断言各分节计数正确、删除按范围聚合、匿名化计数被采集，
  * 且渲染出的 Markdown 对 openid 做了脱敏（BR-21）。
  */
 class ComplianceReportServiceImplTest {
@@ -49,11 +51,12 @@ class ComplianceReportServiceImplTest {
     private final WxMessageMapper wxMessageMapper = mock(WxMessageMapper.class);
     private final WxSessionMapper wxSessionMapper = mock(WxSessionMapper.class);
     private final PetProfileMapper petProfileMapper = mock(PetProfileMapper.class);
+    private final MemoryItemMapper memoryItemMapper = mock(MemoryItemMapper.class);
     private final WxUserMapper wxUserMapper = mock(WxUserMapper.class);
 
     private final ComplianceReportServiceImpl service = new ComplianceReportServiceImpl(
             auditLogMapper, toolLogMapper, rateLimitLogMapper, orchestrationTraceMapper,
-            wxMessageMapper, wxSessionMapper, petProfileMapper, wxUserMapper);
+            wxMessageMapper, wxSessionMapper, petProfileMapper, memoryItemMapper, wxUserMapper);
     private final ComplianceReportAssembler assembler = new ComplianceReportAssembler();
 
     /**
@@ -74,6 +77,7 @@ class ComplianceReportServiceImplTest {
     /** 未显式打桩的查询返回空集，避免 Mock 默认 null 导致 NPE。 */
     @BeforeEach
     void stubEmptyDefaults() {
+        when(memoryItemMapper.selectCount(any())).thenReturn(0L);
         when(auditLogMapper.selectList(any())).thenReturn(List.of());
         when(auditLogMapper.selectPage(any(), any())).thenReturn(new Page<>(1, 10));
         when(toolLogMapper.selectList(any())).thenReturn(List.of());
@@ -88,6 +92,7 @@ class ComplianceReportServiceImplTest {
         when(wxSessionMapper.selectCount(any())).thenReturn(50L);
         when(toolLogMapper.selectCount(any())).thenReturn(30L);
         when(petProfileMapper.selectCount(any())).thenReturn(20L);
+        when(memoryItemMapper.selectCount(any())).thenReturn(12L);
         when(auditLogMapper.selectCount(any())).thenReturn(10L);
         when(rateLimitLogMapper.selectCount(any())).thenReturn(4L);
         when(orchestrationTraceMapper.selectCount(any())).thenReturn(2L);
@@ -99,10 +104,13 @@ class ComplianceReportServiceImplTest {
         assertThat(report.retention().wxSessionCount()).isEqualTo(50);
         assertThat(report.retention().toolLogCount()).isEqualTo(30);
         assertThat(report.retention().petProfileCount()).isEqualTo(20);
+        // W6 新增 PII 载体必须出现在基数中，否则报告低估了系统持有的个人信息
+        assertThat(report.retention().memoryItemCount()).isEqualTo(12);
         // 保留天数取自 DataRetentionService 接口常量
         assertThat(report.retention().messageRetentionDays()).isEqualTo(180);
         assertThat(report.retention().toolLogRetentionDays()).isEqualTo(180);
         assertThat(report.retention().petSoftDeleteGraceDays()).isEqualTo(30);
+        assertThat(report.retention().memoryHistoryRetentionDays()).isEqualTo(180);
     }
 
     @Test
@@ -178,6 +186,25 @@ class ComplianceReportServiceImplTest {
                 .containsEntry(1, 2L).containsEntry(3, 1L);
         // 失败率 = (4 - 成功1) / 4 = 75.0
         assertThat(report.toolCall().failureRate()).isEqualTo(75.0);
+    }
+
+    @Test
+    @DisplayName("投影列全为 NULL 的真实行会被 MyBatis 映射成 null 元素：聚合不得抛 NPE")
+    void toleratesNullProjectedRows() {
+        when(toolLogMapper.selectCount(any())).thenReturn(2L);
+
+        ToolCallLogEntity failed = new ToolCallLogEntity();
+        failed.setStatus(1);
+        failed.setErrorType("L3");
+        // error_type 只投影可空列：成功调用在真实 MyBatis 下是 null 行（List.of 不容 null，故用 Arrays.asList）
+        when(toolLogMapper.selectList(any()))
+                .thenReturn(Arrays.asList(null, failed))
+                .thenReturn(List.of(failed));
+
+        ComplianceReport report = service.generateReport();
+
+        assertThat(report.toolCall().byErrorType()).containsEntry("(空)", 1L).containsEntry("L3", 1L);
+        assertThat(report.toolCall().byStatus()).containsEntry(1, 1L);
     }
 
     @Test

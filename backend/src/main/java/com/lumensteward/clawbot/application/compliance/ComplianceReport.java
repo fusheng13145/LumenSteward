@@ -9,8 +9,8 @@ import java.util.Map;
  *
  * <p>本对象是纯内部聚合产物：所有数据均来自既有日志 / 业务表（{@code log_audit} /
  * {@code log_tool_call} / {@code log_rate_limit} / {@code log_orchestration_trace} /
- * {@code wx_message} / {@code wx_session} / {@code biz_pet_profile} / {@code wx_user}），
- * <b>不引入任何新的数据采集</b>。openid 类个人标识在装配为 VO / Markdown 时统一经
+ * {@code wx_message} / {@code wx_session} / {@code biz_pet_profile} / {@code biz_memory_item} /
+ * {@code wx_user}），<b>不引入任何新的数据采集</b>。openid 类个人标识在装配为 VO / Markdown 时统一经
  * {@code MaskUtils.openid} 脱敏（BR-21）。
  *
  * <p>结构按六大主题分节，每节为一个不可变记录，便于服务层聚合、接口层装配与渲染。
@@ -53,6 +53,8 @@ public record ComplianceReport(
             int toolLogRetentionDays,
             /** 软删档案物理清除宽限期（取自 {@code DataRetentionService.PET_SOFT_DELETE_GRACE_DAYS}）。 */
             int petSoftDeleteGraceDays,
+            /** 状态库已覆盖历史的保留天数（取自 {@code DataRetentionService.MEMORY_HISTORY_RETENTION_DAYS}）。 */
+            int memoryHistoryRetentionDays,
             /** 定时清理 cron 表达式。 */
             String nextRunCron,
             /** 定时清理计划描述。 */
@@ -64,7 +66,9 @@ public record ComplianceReport(
             /** {@code log_tool_call} 当前行数（保留基数）。 */
             long toolLogCount,
             /** {@code biz_pet_profile} 当前行数（保留基数）。 */
-            long petProfileCount
+            long petProfileCount,
+            /** {@code biz_memory_item} 当前行数（含生效与已覆盖历史，W6 新增 PII 载体）。 */
+            long memoryItemCount
     ) {
     }
 

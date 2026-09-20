@@ -27,10 +27,11 @@ public interface UserDataDeletionService {
      * @param messages       删除消息数
      * @param sessions       删除会话数
      * @param pets           删除档案数
+     * @param memories       删除状态库条目数（W6：含生效与已覆盖历史，随对话数据一并删除）
      * @param anonymizedLogs 匿名化工具日志数
      * @param anonymizedUser 是否匿名化账户锚点
      */
     record DeletionSummary(String openid, DeletionScope scope, int messages, int sessions,
-                           int pets, int anonymizedLogs, boolean anonymizedUser) {
+                           int pets, int memories, int anonymizedLogs, boolean anonymizedUser) {
     }
 }
