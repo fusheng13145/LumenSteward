@@ -81,6 +81,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/monitor/console.vue'),
         meta: { title: '实时观测台', requiresAuth: true, requiredPermission: 'monitor:view' },
       },
+      {
+        path: 'profiles/history',
+        name: 'profiles-history',
+        component: () => import('@/views/profile/history.vue'),
+        meta: { title: '档案变更留痕', requiresAuth: true, requiredPermission: 'profile:history' },
+      },
     ],
   },
   {

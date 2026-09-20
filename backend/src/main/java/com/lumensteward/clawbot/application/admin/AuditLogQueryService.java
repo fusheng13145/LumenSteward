@@ -51,6 +51,30 @@ public class AuditLogQueryService {
         return PageResult.from(mpPage);
     }
 
+    /**
+     * 分页检索审计日志（支持按脱敏对象 target 精确过滤，供档案变更留痕 T7 复用）。
+     *
+     * @param page      分页参数
+     * @param regType   资源类型（可空）
+     * @param action    操作标识（可空）
+     * @param target    脱敏后的操作对象（可空，如 {@code MaskUtils.openid(openid)}）
+     * @param startTime 下界（可空）
+     * @param endTime   上界（可空）
+     * @return 分页结果
+     */
+    public PageResult<AuditLogEntity> page(PageQuery page, String regType, String action, String target,
+                                           LocalDateTime startTime, LocalDateTime endTime) {
+        LambdaQueryWrapper<AuditLogEntity> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(notBlank(regType), AuditLogEntity::getRegType, regType)
+                .eq(notBlank(action), AuditLogEntity::getAction, action)
+                .eq(notBlank(target), AuditLogEntity::getTarget, target)
+                .ge(startTime != null, AuditLogEntity::getCreatedAt, startTime)
+                .le(endTime != null, AuditLogEntity::getCreatedAt, endTime)
+                .orderByDesc(AuditLogEntity::getCreatedAt);
+        Page<AuditLogEntity> mpPage = auditLogMapper.selectPage(page.toPage(), wrapper);
+        return PageResult.from(mpPage);
+    }
+
     private static boolean notBlank(String value) {
         return value != null && !value.isBlank();
     }

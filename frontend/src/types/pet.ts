@@ -57,3 +57,21 @@ export interface PetUpdateRequest {
 
 /** 用户宠物查询（不需要分页，占位保持类型一致） */
 export type PetQuery = PageQuery
+
+/** 单条字段变更（前端按 beforeValue/afterValue 解析后组装，用于着色展示） */
+export interface ProfileChangeVO {
+  /** 字段名（snake_case，对齐后端 biz_pet_profile 列名） */
+  field: string
+  /** 变更前值（null 表示新增/无 before） */
+  before: string | null
+  /** 变更后值（null 表示删除/清空） */
+  after: string | null
+}
+
+/** 档案变更历史查询条件（A-4 / T7） */
+export interface ProfileHistoryQuery extends PageQuery {
+  /** 用户标识（脱敏后精确匹配 target 列） */
+  openid?: string
+  /** 操作标识：CREATE/UPDATE/DELETE */
+  action?: string
+}
