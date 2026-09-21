@@ -6,7 +6,8 @@ import java.time.LocalDateTime;
  * 数据保留与清理服务（FR-19 ① 定时清理）。
  *
  * <p>保留策略（OI-06）：会话消息 180 天、工具调用日志 180 天（脱敏后可延长）、
- * 已软删除宠物档案 30 天后物理清除、状态库<b>已覆盖</b>历史 180 天后物理清除。
+ * LLM 调用计量明细 180 天、已软删除宠物档案 30 天后物理清除、
+ * 状态库<b>已覆盖</b>历史 180 天后物理清除。
  */
 public interface DataRetentionService {
 
@@ -14,6 +15,13 @@ public interface DataRetentionService {
     int MESSAGE_RETENTION_DAYS = 180;
     /** 工具日志保留天数。 */
     int TOOL_LOG_RETENTION_DAYS = 180;
+    /**
+     * LLM 调用计量明细保留天数（B-4 / W5）。
+     *
+     * <p>本表是流量最高的日志表，且只存脱敏标识与 token 计数、无对话内容；
+     * 单独给常量而非复用工具日志值——成本趋势看板只需近中期数据，保留期需可独立收紧。
+     */
+    int LLM_CALL_RETENTION_DAYS = 180;
     /** 软删档案物理清除宽限期。 */
     int PET_SOFT_DELETE_GRACE_DAYS = 30;
     /**
@@ -48,6 +56,14 @@ public interface DataRetentionService {
      * @return 删除行数
      */
     int purgeExpiredToolLogs(LocalDateTime cutoff);
+
+    /**
+     * 清理早于截止时间的 LLM 调用计量明细（B-4 / W5，FR-19 ①）。
+     *
+     * @param cutoff 截止时间
+     * @return 删除行数
+     */
+    int purgeExpiredLlmCalls(LocalDateTime cutoff);
 
     /**
      * 物理清除早于截止时间且已软删的宠物档案。

@@ -203,6 +203,21 @@ export const MEMORY_ORIGIN_LABELS: Record<string, string> = {
   TOOL: '工具写入',
 }
 
+// ===== 成本与配额看板（B-4 / 迭代 4 W5，与后端 common/enums/LlmCallPurpose 同源） =====
+/** LLM 调用用途中文名；库里出现的枚举外历史值由页面原样透出 */
+export const LLM_PURPOSE_LABELS: Record<string, string> = {
+  CHAT: '对话编排',
+  MEMORY_EXTRACT: '状态库抽取',
+  INTENT: '意图分类',
+}
+
+/** 日预算状态中文名（对齐后端 BudgetEvaluator.BudgetStatus） */
+export const BUDGET_STATUS_LABELS: Record<string, string> = {
+  NORMAL: '正常',
+  WARN: '接近上限',
+  DEGRADED: '已降级',
+}
+
 // ===== 分页契约（与后端 PageQuery/PageResult 同源，G-10/G-25） =====
 export const PAGE = {
   /** 默认页码 */

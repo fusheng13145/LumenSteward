@@ -5,6 +5,7 @@ import com.lumensteward.clawbot.application.retention.DataRetentionService;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxMessageEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxSessionEntity;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.LlmCallMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.MemoryItemMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
@@ -20,7 +21,7 @@ import java.time.LocalDateTime;
 /**
  * {@link DataRetentionService} 实现（FR-19 ①）。
  *
- * <p>每日凌晨 03:00 执行（cron 秒 分 时 ...）：超出保留期的消息/会话/工具日志删除，
+ * <p>每日凌晨 03:00 执行（cron 秒 分 时 ...）：超出保留期的消息/会话/工具日志/LLM 计量明细删除，
  * 软删超过 {@code PET_SOFT_DELETE_GRACE_DAYS} 天的宠物档案物理清除，
  * 覆盖超过 {@code MEMORY_HISTORY_RETENTION_DAYS} 天的状态库历史条目物理清除
  * （生效事实不自动清除，见 {@link DataRetentionService#MEMORY_HISTORY_RETENTION_DAYS}）。
@@ -36,6 +37,7 @@ public class DataRetentionServiceImpl implements DataRetentionService {
     private final ToolCallLogMapper toolLogMapper;
     private final PetProfileMapper petProfileMapper;
     private final MemoryItemMapper memoryItemMapper;
+    private final LlmCallMapper llmCallMapper;
 
     /**
      * 构造器注入（G-14）。
@@ -45,15 +47,17 @@ public class DataRetentionServiceImpl implements DataRetentionService {
      * @param toolLogMapper     工具日志 Mapper
      * @param petProfileMapper  宠物档案 Mapper
      * @param memoryItemMapper  个人状态库 Mapper（W6：仅清理已覆盖历史）
+     * @param llmCallMapper     LLM 调用计量 Mapper（W5：按 {@code LLM_CALL_RETENTION_DAYS} 清理）
      */
     public DataRetentionServiceImpl(WxMessageMapper messageMapper, WxSessionMapper sessionMapper,
                                    ToolCallLogMapper toolLogMapper, PetProfileMapper petProfileMapper,
-                                   MemoryItemMapper memoryItemMapper) {
+                                   MemoryItemMapper memoryItemMapper, LlmCallMapper llmCallMapper) {
         this.messageMapper = messageMapper;
         this.sessionMapper = sessionMapper;
         this.toolLogMapper = toolLogMapper;
         this.petProfileMapper = petProfileMapper;
         this.memoryItemMapper = memoryItemMapper;
+        this.llmCallMapper = llmCallMapper;
     }
 
     @Override
@@ -63,11 +67,12 @@ public class DataRetentionServiceImpl implements DataRetentionService {
         int messages = safe(() -> purgeExpiredMessages(now.minusDays(MESSAGE_RETENTION_DAYS)), "消息");
         int sessions = safe(() -> purgeExpiredSessions(now.minusDays(MESSAGE_RETENTION_DAYS)), "会话");
         int toolLogs = safe(() -> purgeExpiredToolLogs(now.minusDays(TOOL_LOG_RETENTION_DAYS)), "工具日志");
+        int llmCalls = safe(() -> purgeExpiredLlmCalls(now.minusDays(LLM_CALL_RETENTION_DAYS)), "计量明细");
         int pets = safe(() -> purgePhysicallyDeletedPets(now.minusDays(PET_SOFT_DELETE_GRACE_DAYS)), "软删档案");
         int memoryHistory = safe(() -> purgeSupersededMemories(
                 now.minusDays(MEMORY_HISTORY_RETENTION_DAYS)), "状态库历史");
-        log.info("数据保留定时清理完成 messages={} sessions={} toolLogs={} pets={} memoryHistory={}",
-                messages, sessions, toolLogs, pets, memoryHistory);
+        log.info("数据保留定时清理完成 messages={} sessions={} toolLogs={} llmCalls={} pets={} memoryHistory={}",
+                messages, sessions, toolLogs, llmCalls, pets, memoryHistory);
     }
 
     @Override
@@ -85,6 +90,11 @@ public class DataRetentionServiceImpl implements DataRetentionService {
     @Override
     public int purgeExpiredToolLogs(LocalDateTime cutoff) {
         return toolLogMapper.deleteBefore(cutoff);
+    }
+
+    @Override
+    public int purgeExpiredLlmCalls(LocalDateTime cutoff) {
+        return llmCallMapper.deleteBefore(cutoff);
     }
 
     @Override

@@ -1,6 +1,8 @@
 package com.lumensteward.clawbot.application.intent;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lumensteward.clawbot.application.ratelimit.CostBudgetService;
+import com.lumensteward.clawbot.common.enums.LlmCallPurpose;
 import com.lumensteward.clawbot.common.util.JsonUtils;
 import com.lumensteward.clawbot.domain.intent.IntentClassifier;
 import com.lumensteward.clawbot.domain.intent.IntentResult;
@@ -40,14 +42,18 @@ public class LlmIntentClassifier implements IntentClassifier {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     private final LlmClient llmClient;
+    /** 成本保护预算服务（可为 null，此时意图分类的 token 不计入日预算、也不落明细）。 */
+    private final CostBudgetService costBudgetService;
 
     /**
      * 构造器注入（G-14）。
      *
-     * @param llmClient LLM 客户端
+     * @param llmClient         LLM 客户端
+     * @param costBudgetService 成本保护预算服务（可为 null）
      */
-    public LlmIntentClassifier(LlmClient llmClient) {
+    public LlmIntentClassifier(LlmClient llmClient, CostBudgetService costBudgetService) {
         this.llmClient = llmClient;
+        this.costBudgetService = costBudgetService;
     }
 
     @Override
@@ -61,6 +67,7 @@ public class LlmIntentClassifier implements IntentClassifier {
         try {
             ChatResult result = llmClient.chat(
                     ChatRequest.of(null, messages, List.of(), TIMEOUT));
+            recordUsage(result);
             return parse(result.content());
         } catch (LlmException e) {
             log.warn("意图分类调用失败，回落 UNKNOWN: err={}", e.getMessage());
@@ -69,6 +76,24 @@ public class LlmIntentClassifier implements IntentClassifier {
             log.warn("意图分类异常，回落 UNKNOWN: err={}", e.getMessage());
             return IntentResult.unknown();
         }
+    }
+
+    /**
+     * 计入成本（FR-20 ③ / B-4）。
+     *
+     * <p><b>openid 传 null</b>：领域端口 {@code IntentClassifier.classify} 只收历史与本轮原文，
+     * 不携带用户标识；不为此拓宽领域契约，代价是这类调用在按用户聚合时落入「未归属」桶
+     * （全局口径仍完整，见手册 §2.25）。
+     *
+     * @param response 对话结果（可空）
+     */
+    private void recordUsage(ChatResult response) {
+        if (costBudgetService == null || response == null || response.usage() == null) {
+            return;
+        }
+        costBudgetService.recordLlmCall(new CostBudgetService.LlmCallUsage(
+                LlmCallPurpose.INTENT, llmClient.provider(), null, null, null, null,
+                response.usage().promptTokens(), response.usage().completionTokens()));
     }
 
     private IntentResult parse(String content) {

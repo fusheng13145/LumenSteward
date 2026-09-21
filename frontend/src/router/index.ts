@@ -100,6 +100,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '个人状态库', requiresAuth: true, requiredPermission: 'memory:view' },
       },
       {
+        path: 'cost',
+        name: 'cost',
+        component: () => import('@/views/cost/index.vue'),
+        meta: { title: '成本与配额', requiresAuth: true, requiredPermission: 'cost:view' },
+      },
+      {
         path: 'compliance/export',
         name: 'compliance-export',
         component: () => import('@/views/compliance/export.vue'),

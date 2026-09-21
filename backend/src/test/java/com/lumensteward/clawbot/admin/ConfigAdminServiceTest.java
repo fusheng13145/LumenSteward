@@ -203,6 +203,51 @@ class ConfigAdminServiceTest {
     }
 
     @Test
+    @DisplayName("FR-20 / B-4：配额阈值置 0 或负数拒绝（不是「关闭」的合法表达），不落库不失效缓存")
+    void shouldRejectNonPositiveQuotaThreshold() {
+        when(mapper.selectOne(any())).thenReturn(entity("rate_limit.daily_token_budget", "200000", "INT"));
+
+        assertThatThrownBy(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("rate_limit.daily_token_budget", "0")),
+                "临时收口", 1L, "127.0.0.1"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("限流/配额阈值必须为正整数");
+
+        assertThatThrownBy(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("rate_limit.max_message_length", "-1")),
+                "临时收口", 1L, "127.0.0.1"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("限流/配额阈值必须为正整数");
+
+        verify(mapper, never()).updateById(any(SysConfigEntity.class));
+        verify(cache, never()).invalidate("rate_limit.daily_token_budget");
+    }
+
+    @Test
+    @DisplayName("FR-20 / B-4：配额阈值调正数放行且免重启生效（热生效路径）")
+    void shouldAcceptPositiveQuotaThreshold() {
+        when(mapper.selectOne(any())).thenReturn(entity("rate_limit.daily_token_budget", "200000", "INT"));
+
+        service.update(List.of(new ConfigAdminService.ConfigItem("rate_limit.daily_token_budget", "500000")),
+                "放量期提高日预算", 1L, "127.0.0.1");
+
+        ArgumentCaptor<SysConfigEntity> captor = ArgumentCaptor.forClass(SysConfigEntity.class);
+        verify(mapper).updateById(captor.capture());
+        assertThat(captor.getValue().getConfigValue()).isEqualTo("500000");
+        verify(cache).invalidate("rate_limit.daily_token_budget");
+    }
+
+    @Test
+    @DisplayName("FR-20 / B-4：限流域的非整数项（白名单 STRING）不受正数校验影响，空串放行")
+    void shouldNotApplyQuotaRangeToStringKeys() {
+        when(mapper.selectOne(any())).thenReturn(entity("rate_limit.whitelist", "", "STRING"));
+
+        assertThatCode(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("rate_limit.whitelist", "oABC1234")),
+                "加白一个用户", 1L, "127.0.0.1")).doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("恢复默认值：写回 default_value 并失效缓存")
     void shouldResetToDefault() {
         SysConfigEntity entity = entity("llm.model", "gpt-4o-mini", "STRING");

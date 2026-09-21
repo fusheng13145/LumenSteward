@@ -8,6 +8,7 @@ import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxMessageEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxSessionEntity;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.LlmCallMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.MemoryItemMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
@@ -34,6 +35,7 @@ public class UserDataDeletionServiceImpl implements UserDataDeletionService {
     private final PetProfileMapper petProfileMapper;
     private final MemoryItemMapper memoryItemMapper;
     private final ToolCallLogMapper toolLogMapper;
+    private final LlmCallMapper llmCallMapper;
     private final WxUserMapper wxUserMapper;
     private final AuditLogService auditLogService;
 
@@ -45,18 +47,20 @@ public class UserDataDeletionServiceImpl implements UserDataDeletionService {
      * @param petProfileMapper  宠物档案 Mapper
      * @param memoryItemMapper  个人状态库 Mapper（W6 派生 PII，随对话数据一并删除）
      * @param toolLogMapper     工具日志 Mapper
+     * @param llmCallMapper     LLM 调用计量 Mapper（W5：按脱敏 openid 匿名化）
      * @param wxUserMapper      用户 Mapper
      * @param auditLogService   审计服务
      */
     public UserDataDeletionServiceImpl(WxMessageMapper messageMapper, WxSessionMapper sessionMapper,
                                       PetProfileMapper petProfileMapper, MemoryItemMapper memoryItemMapper,
-                                      ToolCallLogMapper toolLogMapper,
+                                      ToolCallLogMapper toolLogMapper, LlmCallMapper llmCallMapper,
                                       WxUserMapper wxUserMapper, AuditLogService auditLogService) {
         this.messageMapper = messageMapper;
         this.sessionMapper = sessionMapper;
         this.petProfileMapper = petProfileMapper;
         this.memoryItemMapper = memoryItemMapper;
         this.toolLogMapper = toolLogMapper;
+        this.llmCallMapper = llmCallMapper;
         this.wxUserMapper = wxUserMapper;
         this.auditLogService = auditLogService;
     }
@@ -88,6 +92,8 @@ public class UserDataDeletionServiceImpl implements UserDataDeletionService {
         if (scope == DeletionScope.ALL) {
             String anon = "anon_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
             anonymizedLogs = toolLogMapper.anonymizeOpenid(openid, anon);
+            // W5：log_llm_call 存的是**脱敏形态** openid，故按脱敏值匹配（传原文会命中 0 行）
+            anonymizedLogs += llmCallMapper.anonymizeOpenid(MaskUtils.openid(openid), anon);
             int userRows = wxUserMapper.anonymize(openid, anon);
             anonymizedUser = userRows > 0;
         }

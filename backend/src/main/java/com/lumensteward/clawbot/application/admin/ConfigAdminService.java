@@ -32,7 +32,8 @@ import java.util.Set;
  *   <li><b>变更前后值留痕（AC③）：</b>非密钥配置记录可读的前/后值（截断 500 字），
  *       密钥仅尾号——留痕<b>可比对</b>而不泄露明文。</li>
  *   <li><b>非法值被拒（AC④）：</b>按 {@code value_type} 校验；工具开关额外校验必须是已注册工具名，
- *       杜绝"禁用一个不存在的工具"这类静默无效操作。</li>
+ *       杜绝"禁用一个不存在的工具"这类静默无效操作；{@code gray.*.percent} 限 0~100，
+ *       {@code rate_limit.*} 的整数阈值限正数（FR-20 阈值可免重启调整，但不得调成不可用值）。</li>
  * </ol>
  *
  * <p>依赖铁律（NFR-MA-03）：本服务位于 application 层，仅依赖 domain 抽象
@@ -66,6 +67,9 @@ public class ConfigAdminService {
 
     /** 灰度比例配置键后缀（FR-22 异常流 2a 值域校验）。 */
     private static final String PERCENT_KEY_SUFFIX = ".percent";
+
+    /** 限流/成本配额配置键前缀（FR-20 / B-4：整数阈值须为正，见 {@link #requirePositiveQuotaInt}）。 */
+    private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit.";
 
     private final SysConfigMapper sysConfigMapper;
     private final AuditLogService auditLogService;
@@ -189,6 +193,30 @@ public class ConfigAdminService {
         }
         if (entity.getConfigKey().startsWith(GRAY_KEY_PREFIX) && entity.getConfigKey().endsWith(PERCENT_KEY_SUFFIX)) {
             requireGrayPercent(entity, value);
+        }
+        if (entity.getConfigKey().startsWith(RATE_LIMIT_KEY_PREFIX)) {
+            requirePositiveQuotaInt(entity, value, type);
+        }
+    }
+
+    /**
+     * 限流/成本配额阈值校验（FR-20 / B-4）：整数项必须为正。
+     *
+     * <p>为什么不给 0 留口子：{@code daily_token_budget=0} 会让每次调用都判定为预算耗尽、
+     * 全站立即只回兜底文案，{@code max_message_length=0} 会截断一切消息——两者都不是
+     * 「关闭该能力」的合法表达（关闭有各自的开关），而是不可用配置，宁拒不留。
+     *
+     * @param entity 配置实体
+     * @param value  待写入值（INT 类型已由 {@link #requireInt} 保证可解析）
+     * @param type   归一化后的值类型
+     */
+    private static void requirePositiveQuotaInt(SysConfigEntity entity, String value, String type) {
+        if (!TYPE_INT.equals(type) || value == null || value.isBlank()) {
+            return;
+        }
+        if (Integer.parseInt(value.trim()) <= 0) {
+            throw BizException.of(ErrorCode.PARAM_INVALID,
+                    "限流/配额阈值必须为正整数: " + entity.getConfigKey() + "=" + value.trim());
         }
     }
 

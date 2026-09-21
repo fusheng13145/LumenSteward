@@ -43,6 +43,8 @@ export const PERMISSIONS = {
   MEMORY_DELETE: 'memory:delete',
   /** 合规报告导出（B-5/W4 前端入口；SUPER_ADMIN 独占，与后端 @PreAuthorize 同口径） */
   COMPLIANCE_EXPORT: 'compliance:export',
+  /** 成本与配额看板查看（B-4/W5；只读，口径同监控与状态库，三角色可读） */
+  COST_VIEW: 'cost:view',
 } as const
 
 /** 权限码字面量联合类型 */
@@ -67,6 +69,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.DOCTOR_VIEW,
     PERMISSIONS.TASK_ABANDON,
     PERMISSIONS.MEMORY_VIEW,
+    PERMISSIONS.COST_VIEW,
   ],
   // 审计员：日志与统计只读；不可修改任何业务数据
   AUDITOR: [
@@ -78,6 +81,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.MONITOR_VIEW,
     PERMISSIONS.DOCTOR_VIEW,
     PERMISSIONS.MEMORY_VIEW,
+    PERMISSIONS.COST_VIEW,
   ],
 }
 
@@ -94,6 +98,7 @@ export const MENU_PERMISSIONS: Record<string, PermissionCode> = {
   profiles: PERMISSIONS.PROFILE_HISTORY,
   memories: PERMISSIONS.MEMORY_VIEW,
   'compliance-export': PERMISSIONS.COMPLIANCE_EXPORT,
+  cost: PERMISSIONS.COST_VIEW,
 }
 
 /**

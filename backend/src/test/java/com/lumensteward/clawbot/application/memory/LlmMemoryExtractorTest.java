@@ -1,6 +1,7 @@
 package com.lumensteward.clawbot.application.memory;
 
 import com.lumensteward.clawbot.application.ratelimit.CostBudgetService;
+import com.lumensteward.clawbot.common.enums.LlmCallPurpose;
 import com.lumensteward.clawbot.common.enums.MemoryKind;
 import com.lumensteward.clawbot.common.enums.MemoryOrigin;
 import com.lumensteward.clawbot.domain.memory.MemoryWrite;
@@ -18,7 +19,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,6 +42,7 @@ class LlmMemoryExtractorTest {
     }
 
     private void reply(String content) {
+        when(llm.provider()).thenReturn("mock");
         when(llm.chat(any())).thenReturn(new ChatResult(content, List.of(),
                 TokenUsage.of(100, 40), "stop", null));
     }
@@ -130,13 +131,25 @@ class LlmMemoryExtractorTest {
     }
 
     @Test
-    @DisplayName("额外一次模型调用的 token 计入日预算（不隐藏成本）")
+    @DisplayName("额外一次模型调用的 token 计入日预算，并带用途/溯源归因（不隐藏成本）")
     void recordsTokenUsage() {
         reply("[]");
 
         extractor.extract(notice(), 5);
 
-        verify(costBudgetService).recordLlmCall(140);
+        ArgumentCaptor<CostBudgetService.LlmCallUsage> captor = ArgumentCaptor.forClass(
+                CostBudgetService.LlmCallUsage.class);
+        verify(costBudgetService).recordLlmCall(captor.capture());
+        CostBudgetService.LlmCallUsage usage = captor.getValue();
+        assertThat(usage.purpose()).isEqualTo(LlmCallPurpose.MEMORY_EXTRACT);
+        assertThat(usage.provider()).isEqualTo("mock");
+        assertThat(usage.model()).isNull();
+        assertThat(usage.openid()).isEqualTo("openid-1");
+        assertThat(usage.sessionId()).isEqualTo(42L);
+        assertThat(usage.traceId()).isEqualTo("trace-1");
+        assertThat(usage.promptTokens()).isEqualTo(100);
+        assertThat(usage.completionTokens()).isEqualTo(40);
+        assertThat(usage.totalTokens()).isEqualTo(140);
     }
 
     @Test
@@ -171,6 +184,6 @@ class LlmMemoryExtractorTest {
         LlmMemoryExtractor standalone = new LlmMemoryExtractor(llm, null);
 
         assertThat(standalone.extract(notice(), 5)).hasSize(1);
-        verify(costBudgetService, never()).recordLlmCall(anyInt());
+        verify(costBudgetService, never()).recordLlmCall(any());
     }
 }

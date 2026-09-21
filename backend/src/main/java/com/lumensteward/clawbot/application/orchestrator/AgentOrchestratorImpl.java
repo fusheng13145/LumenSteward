@@ -24,6 +24,7 @@ import com.lumensteward.clawbot.application.safety.ContentSafetyService;
 import com.lumensteward.clawbot.application.safety.RuleBasedConsistencyChecker;
 import com.lumensteward.clawbot.application.safety.SafetyVerdict;
 import com.lumensteward.clawbot.common.enums.AnomalyLayer;
+import com.lumensteward.clawbot.common.enums.LlmCallPurpose;
 import com.lumensteward.clawbot.common.enums.SessionState;
 import com.lumensteward.clawbot.common.enums.ToolStatus;
 import com.lumensteward.clawbot.common.util.JsonUtils;
@@ -358,7 +359,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             long llmStartNanos = System.nanoTime();
             try {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
-                recordUsage(response);
+                recordUsage(response, openid, sessionId, traceId);
                 llmCalls++;
             } catch (LlmException e) {
                 FallbackReason reason = mapLlmReason(e);
@@ -399,7 +400,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             long convStartNanos = System.nanoTime();
             try {
                 response = llmClient.chat(ChatRequest.of(effectiveModel(), messages, tools, llmTimeout));
-                recordUsage(response);
+                recordUsage(response, openid, sessionId, traceId);
                 llmCalls++;
             } catch (LlmException e) {
                 log.warn("强制收敛调用失败: errType={}", e.errorType());
@@ -786,15 +787,24 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     }
 
     /**
-     * 记录本次 LLM 调用的 token 消耗（FR-20 ③ 成本保护）。
+     * 记录本次 LLM 调用的 token 消耗（FR-20 ③ 成本保护 / B-4 计量明细）。
      *
-     * @param response 对话结果（可空）
+     * <p>编排链路的每一轮（含 SC-04 强制收敛）都计一次，用途归 {@code CHAT}；
+     * openid 传原始值，脱敏在基础设施写入侧统一完成（BR-21）。
+     *
+     * @param response  对话结果（可空）
+     * @param openid    用户标识（原始值）
+     * @param sessionId 会话 id（可空）
+     * @param traceId   链路标识（可空）
      */
-    private void recordUsage(ChatResult response) {
+    private void recordUsage(ChatResult response, String openid, Long sessionId, String traceId) {
         if (costBudgetService == null || response == null || response.usage() == null) {
             return;
         }
-        costBudgetService.recordLlmCall(response.usage().totalTokens());
+        costBudgetService.recordLlmCall(new CostBudgetService.LlmCallUsage(LlmCallPurpose.CHAT,
+                llmClient.provider(),
+                effectiveModel(), openid, sessionId, traceId,
+                response.usage().promptTokens(), response.usage().completionTokens()));
     }
 
     /**

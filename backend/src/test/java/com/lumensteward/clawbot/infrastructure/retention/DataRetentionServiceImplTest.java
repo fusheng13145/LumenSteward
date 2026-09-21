@@ -1,5 +1,6 @@
 package com.lumensteward.clawbot.infrastructure.retention;
 
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.LlmCallMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.MemoryItemMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
@@ -27,9 +28,10 @@ class DataRetentionServiceImplTest {
     private final ToolCallLogMapper toolLogMapper = mock(ToolCallLogMapper.class);
     private final PetProfileMapper petProfileMapper = mock(PetProfileMapper.class);
     private final MemoryItemMapper memoryItemMapper = mock(MemoryItemMapper.class);
+    private final LlmCallMapper llmCallMapper = mock(LlmCallMapper.class);
     private final DataRetentionServiceImpl service =
             new DataRetentionServiceImpl(messageMapper, sessionMapper, toolLogMapper,
-                    petProfileMapper, memoryItemMapper);
+                    petProfileMapper, memoryItemMapper, llmCallMapper);
 
     @Test
     @DisplayName("purgeExpiredMessages 按 createdAt<cutoff 删除并返回影响行数")

@@ -2,6 +2,7 @@ package com.lumensteward.clawbot.infrastructure.retention;
 
 import com.lumensteward.clawbot.application.retention.DeletionScope;
 import com.lumensteward.clawbot.application.retention.UserDataDeletionService.DeletionSummary;
+import com.lumensteward.clawbot.infrastructure.persistence.mapper.LlmCallMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.MemoryItemMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.PetProfileMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
@@ -32,12 +33,13 @@ class UserDataDeletionServiceImplTest {
     private final WxSessionMapper sessionMapper = mock(WxSessionMapper.class);
     private final PetProfileMapper petProfileMapper = mock(PetProfileMapper.class);
     private final MemoryItemMapper memoryItemMapper = mock(MemoryItemMapper.class);
+    private final LlmCallMapper llmCallMapper = mock(LlmCallMapper.class);
     private final ToolCallLogMapper toolLogMapper = mock(ToolCallLogMapper.class);
     private final WxUserMapper wxUserMapper = mock(WxUserMapper.class);
     private final AuditLogService auditLogService = mock(AuditLogService.class);
     private final UserDataDeletionServiceImpl service = new UserDataDeletionServiceImpl(
             messageMapper, sessionMapper, petProfileMapper, memoryItemMapper,
-            toolLogMapper, wxUserMapper, auditLogService);
+            toolLogMapper, llmCallMapper, wxUserMapper, auditLogService);
 
     @Test
     @DisplayName("ALL 范围：清对话+档案+状态库，匿名化工具日志与账户锚点，留审计，无残留 PII")

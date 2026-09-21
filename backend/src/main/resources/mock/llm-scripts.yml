@@ -1,11 +1,19 @@
 # ============================================================================
 # Mock LLM 可编程脚本（T03 / AC-D1 / 供 T04 TC-H 反幻觉专项使用）
 # 由 MockLlmClient 加载；按「轮次 + 最近一条 user 消息子串」确定性返回，
-# 可注入 tool_calls / 终态文本 / 失败（TIMEOUT|UNAVAILABLE|PROTOCOL）。
+# 可注入 tool_calls / 终态文本 / 失败（TIMEOUT|UNAVAILABLE|PROTOCOL）/ token 计量。
 # 说明：round 以「消息序列中带 toolCalls 的 assistant 消息数量」推定。
+# ----------------------------------------------------------------------------
+# usage / defaultUsage：模拟 provider 回报的 token 计量（B-4 / 手册 §2.25）。
+# 此前 Mock 恒回报 0 token，导致「计量在转」这一事实在本机根本无法取证；声明后
+# 每次调用都会写 log_llm_call 一行并累加日预算桶，两者数值须可比对。
+# 数值取接近真实的量级（编排轮含系统提示 + 工具 Schema + 状态库注入块）。
 # ============================================================================
 defaultContent: "（Mock）我在呢，随时听你说～"
 defaultFinishReason: stop
+defaultUsage:
+  prompt: 520
+  completion: 60
 
 rules:
   # ---- 个人状态库生长（W6）：抽取器请求的载荷以【记忆抽取】开头，必须置于首位 ----
@@ -15,6 +23,9 @@ rules:
     round: 0
     match: "【记忆抽取】"
     finishReason: stop
+    usage:
+      prompt: 410
+      completion: 85
     content: '{"items":[{"kind":"PERSON","name":"妈妈","content":"住在北京，喜欢喝绿茶","confidence":0.8},{"kind":"PREFERENCE","name":"饮品","content":"偏好无糖茶饮","confidence":0.7}]}'
 
   # ---- FR-23 示例插件 query_weather：运行期取证入口（见手册 §7.14） ----
@@ -25,6 +36,9 @@ rules:
     round: 0
     match: "查天气"
     finishReason: tool_calls
+    usage:
+      prompt: 640
+      completion: 40
     toolCalls:
       - id: mock-call-weather
         type: function
@@ -36,6 +50,9 @@ rules:
     round: 1
     match: "查天气"
     finishReason: stop
+    usage:
+      prompt: 780
+      completion: 55
     content: "杭州今天晴，26℃（演示数据集样例，非真实预报）。"
 
   # ---- 宠物档案：本轮发起工具调用（第 0 轮） ----
@@ -43,6 +60,9 @@ rules:
     round: 0
     match: "叫"
     finishReason: tool_calls
+    usage:
+      prompt: 620
+      completion: 45
     toolCalls:
       - id: mock-call-1
         type: function
@@ -53,6 +73,9 @@ rules:
   - name: pet-after-tool
     round: 1
     finishReason: stop
+    usage:
+      prompt: 760
+      completion: 30
     content: "好嘞，咪咪的档案我已经记下啦。"
 
   # ---- 反幻觉用例：声称已查快递但未调用任何工具（应被一致性校验拦截） ----

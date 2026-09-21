@@ -1,0 +1,29 @@
+# ============================================================================
+# MockScript token 计量可编程性用例脚本（B-4 / 迭代 4 W5）
+# 专供 MockScriptTest 加载，不进主脚本（主脚本改动会影响 W6/W3 既有用例）。
+# ============================================================================
+defaultContent: "默认回复"
+defaultFinishReason: stop
+defaultUsage:
+  prompt: 500
+  completion: 50
+
+rules:
+  - name: with-usage
+    match: "带计量"
+    finishReason: stop
+    usage:
+      prompt: 640
+      completion: 40
+    content: "带计量的回复"
+
+  - name: without-usage
+    match: "跟随默认"
+    finishReason: stop
+    content: "跟随脚本级默认计量"
+
+  - name: broken-usage
+    match: "计量格式非法"
+    finishReason: stop
+    usage: "not-a-map"
+    content: "计量节点非 Map 时回落默认"

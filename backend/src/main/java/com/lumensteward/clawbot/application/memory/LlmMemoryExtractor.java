@@ -2,6 +2,7 @@ package com.lumensteward.clawbot.application.memory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.lumensteward.clawbot.application.ratelimit.CostBudgetService;
+import com.lumensteward.clawbot.common.enums.LlmCallPurpose;
 import com.lumensteward.clawbot.common.enums.MemoryKind;
 import com.lumensteward.clawbot.common.enums.MemoryOrigin;
 import com.lumensteward.clawbot.common.util.JsonUtils;
@@ -27,7 +28,7 @@ import java.util.List;
  * <b>绝不向主链路抛出</b>（生长失败只是「这条没记住」，不是「这次回复失败」）。
  *
  * <p>本调用是<b>链路成功之后的额外一次模型调用</b>，因此其 token 消耗同样计入
- * FR-20 ③ 日预算（{@link CostBudgetService#recordLlmCall(int)}），不隐藏成本。
+ * FR-20 ③ 日预算、并落 {@code log_llm_call} 明细（用途 {@code MEMORY_EXTRACT}），不隐藏成本。
  *
  * <p>超时刻意短于主链路单轮预算（SC-03 的 8s）：本调用在后台线程，慢不如弃。
  */
@@ -96,7 +97,7 @@ public class LlmMemoryExtractor implements MemoryExtractor {
             log.warn("记忆抽取异常，本轮不生长: err={}", e.getMessage());
             return List.of();
         }
-        recordUsage(result);
+        recordUsage(result, notice);
         return parseCandidates(result.content(), notice, Math.min(maxItems, HARD_MAX_ITEMS));
     }
 
@@ -179,10 +180,14 @@ public class LlmMemoryExtractor implements MemoryExtractor {
         return BigDecimal.valueOf(value);
     }
 
-    private void recordUsage(ChatResult response) {
+    private void recordUsage(ChatResult response, MemoryGrowthNotice notice) {
         if (costBudgetService == null || response == null || response.usage() == null) {
             return;
         }
-        costBudgetService.recordLlmCall(response.usage().totalTokens());
+        // 模型名传 null：本调用未指定，使用供应商默认模型（口径与 log_llm_call.model 可空一致）
+        costBudgetService.recordLlmCall(new CostBudgetService.LlmCallUsage(
+                LlmCallPurpose.MEMORY_EXTRACT, llmClient.provider(), null,
+                notice.openid(), notice.sessionId(), notice.traceId(),
+                response.usage().promptTokens(), response.usage().completionTokens()));
     }
 }

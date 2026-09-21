@@ -37,11 +37,20 @@ import java.util.Map;
  *     failure: TIMEOUT         # 可选：TIMEOUT / UNAVAILABLE / PROTOCOL
  *     finishReason: tool_calls # 可选
  *     content: "..."           # 可选
+ *     usage:                   # 可选：模拟 provider 回报的 token 计量（B-4 取证用）
+ *       prompt: 120
+ *       completion: 30
  *     toolCalls:               # 可选
  *       - id: c1
  *         name: manage_pet_profile
  *         arguments: '{"action":"READ"}'
  * </pre>
+ *
+ * <p><b>token 计量为何要可编程：</b>成本明细（{@code log_llm_call}）与日预算计数在 Mock 下
+ * 恒为 0 时，「计量在转」这一事实本机无法取证。规则级 {@code usage} 让脚本能回报指定 token 数，
+ * 使 B-4 的看板数值在无真实 provider 时仍可验证。规则未声明 {@code usage} 时沿用脚本级
+ * {@code defaultUsage}，两者都未配置即为 {@link TokenUsage#EMPTY}
+ * （与真实 provider 缺失 usage 字段时的行为一致）。
  *
  * <p>"轮次" 的推定：{@code chat} 入参不含轮次，故 Mock 以「消息序列中带 toolCalls 的 assistant
  * 消息数量」作为当前轮次（与 Agent Loop 每轮至多一次工具调用吻合，SRS 9.4.3）。
@@ -53,11 +62,14 @@ public final class MockScript {
     private final List<Rule> rules;
     private final String defaultContent;
     private final String defaultFinishReason;
+    private final TokenUsage defaultUsage;
 
-    private MockScript(List<Rule> rules, String defaultContent, String defaultFinishReason) {
+    private MockScript(List<Rule> rules, String defaultContent, String defaultFinishReason,
+                       TokenUsage defaultUsage) {
         this.rules = rules == null ? List.of() : List.copyOf(rules);
         this.defaultContent = defaultContent == null ? "（Mock）你好呀，我是衔光管家～" : defaultContent;
         this.defaultFinishReason = defaultFinishReason == null ? "stop" : defaultFinishReason;
+        this.defaultUsage = defaultUsage == null ? TokenUsage.EMPTY : defaultUsage;
     }
 
     /**
@@ -82,6 +94,7 @@ public final class MockScript {
             Map<String, Object> root = (Map<String, Object>) loaded;
             String defaultContent = asString(root.get("defaultContent"));
             String defaultFinishReason = asString(root.get("defaultFinishReason"));
+            TokenUsage defaultUsage = parseUsage(root.get("defaultUsage"));
             List<Rule> rules = new ArrayList<>();
             Object rulesNode = root.get("rules");
             if (rulesNode instanceof List) {
@@ -92,7 +105,7 @@ public final class MockScript {
                 }
             }
             log.info("Mock 脚本加载完成: path={} rules={}", path, rules.size());
-            return new MockScript(rules, defaultContent, defaultFinishReason);
+            return new MockScript(rules, defaultContent, defaultFinishReason, defaultUsage);
         } catch (IOException | RuntimeException e) {
             log.warn("Mock 脚本加载失败，使用空脚本: path={} err={}", path, e.getMessage());
             return empty();
@@ -101,7 +114,7 @@ public final class MockScript {
 
     /** 空脚本（默认回复）。 */
     public static MockScript empty() {
-        return new MockScript(List.of(), null, null);
+        return new MockScript(List.of(), null, null, null);
     }
 
     /**
@@ -124,9 +137,10 @@ public final class MockScript {
             String finish = rule.finishReason() != null
                     ? rule.finishReason()
                     : (rule.toolCalls().isEmpty() ? "stop" : "tool_calls");
-            return new ChatResult(rule.content(), rule.toolCalls(), TokenUsage.EMPTY, finish, null);
+            return new ChatResult(rule.content(), rule.toolCalls(),
+                    rule.usage() == null ? defaultUsage : rule.usage(), finish, null);
         }
-        return new ChatResult(defaultContent, List.of(), TokenUsage.EMPTY, defaultFinishReason, null);
+        return new ChatResult(defaultContent, List.of(), defaultUsage, defaultFinishReason, null);
     }
 
     private static LlmException buildFailure(String type) {
@@ -160,6 +174,7 @@ public final class MockScript {
         String failure = asString(node.get("failure"));
         String content = asString(node.get("content"));
         String finishReason = asString(node.get("finishReason"));
+        TokenUsage usage = parseUsage(node.get("usage"));
         List<ToolCall> toolCalls = new ArrayList<>();
         Object callsNode = node.get("toolCalls");
         if (callsNode instanceof List) {
@@ -174,7 +189,25 @@ public final class MockScript {
                 }
             }
         }
-        return new Rule(name, round, match, failure, content, finishReason, toolCalls);
+        return new Rule(name, round, match, failure, content, finishReason, usage, toolCalls);
+    }
+
+    /**
+     * 解析 token 计量节点：{@code {prompt: N, completion: M}}。
+     *
+     * @param node YAML 节点；非 Map 时返回 null（沿用脚本级默认）
+     * @return 计量值；节点缺失或非 Map 时 null
+     */
+    @SuppressWarnings("unchecked")
+    private static TokenUsage parseUsage(Object node) {
+        if (!(node instanceof Map)) {
+            return null;
+        }
+        Map<String, Object> map = (Map<String, Object>) node;
+        Integer prompt = asInteger(map.get("prompt"));
+        Integer completion = asInteger(map.get("completion"));
+        return TokenUsage.of(Math.max(0, prompt == null ? 0 : prompt),
+                Math.max(0, completion == null ? 0 : completion));
     }
 
     private static String asString(Object value) {
@@ -204,10 +237,12 @@ public final class MockScript {
      * @param failure      注入故障类型（null=正常）
      * @param content      终态文本
      * @param finishReason 结束原因
+     * @param usage        模拟 token 计量（null=沿用脚本级 defaultUsage）
      * @param toolCalls    工具调用
      */
     private record Rule(String name, Integer round, String match, String failure,
-                        String content, String finishReason, List<ToolCall> toolCalls) {
+                        String content, String finishReason, TokenUsage usage,
+                        List<ToolCall> toolCalls) {
 
         boolean matches(int currentRound, String lastUserContent) {
             if (round != null && round != currentRound) {
