@@ -2,6 +2,8 @@ package com.lumensteward.clawbot.application.memory;
 
 import com.lumensteward.clawbot.application.config.ConfigKeys;
 import com.lumensteward.clawbot.application.config.DynamicConfigService;
+import com.lumensteward.clawbot.application.gray.GrayFeature;
+import com.lumensteward.clawbot.application.gray.GrayReleaseService;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.memory.MemoryStore;
 import com.lumensteward.clawbot.domain.memory.MemoryWrite;
@@ -28,6 +30,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>闸门（{@code memory.growth.enabled}）默认关闭：该能力每条消息多一次模型调用，
  * 属<b>预留未启用</b>项（G-32/G-33），须由管理者显式开启；开关经动态配置读取，改值免重启。
+ * 开启后再过灰度闸门（{@code gray.memory_growth.*}，FR-22）：按 openid 稳定分桶比例 + 白名单
+ * 逐用户放量，熔断回滚置 0 即全量停止生长（默认比例 100，行为与灰度上线前一致）。
  *
  * <p>BR-07：候选事实的 openid 来自当轮消息，写入即落在该用户名下，无跨用户路径。
  */
@@ -45,6 +49,7 @@ public class MemoryGrowthListener {
     private final MemoryExtractor extractor;
     private final MemoryStore memoryStore;
     private final DynamicConfigService dynamicConfig;
+    private final GrayReleaseService grayRelease;
 
     /** 因队列满被丢弃的轮次数（可观测，避免「静默失效」重演 D7）。 */
     private final AtomicLong dropped = new AtomicLong();
@@ -57,12 +62,14 @@ public class MemoryGrowthListener {
      * @param extractor     记忆抽取器
      * @param memoryStore   状态库存储端口
      * @param dynamicConfig 动态配置源
+     * @param grayRelease   灰度分流（FR-22：主开关开启后按比例/白名单逐用户放量）
      */
     public MemoryGrowthListener(MemoryExtractor extractor, MemoryStore memoryStore,
-                               DynamicConfigService dynamicConfig) {
+                               DynamicConfigService dynamicConfig, GrayReleaseService grayRelease) {
         this.extractor = extractor;
         this.memoryStore = memoryStore;
         this.dynamicConfig = dynamicConfig;
+        this.grayRelease = grayRelease;
         this.executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(QUEUE_CAPACITY),
                 runnable -> {
@@ -86,7 +93,7 @@ public class MemoryGrowthListener {
         if (notice == null || !notice.worthExtracting()) {
             return;
         }
-        if (!enabled()) {
+        if (!enabled(notice.openid())) {
             return;
         }
         int maxItems = maxItems();
@@ -122,9 +129,18 @@ public class MemoryGrowthListener {
         }
     }
 
-    private boolean enabled() {
+    /**
+     * 闸门：主开关开启<b>且</b>该用户命中灰度（FR-22）。
+     *
+     * <p>比例默认 100，故灰度上线不改变既有行为；熔断回滚置 0 后本方法对该用户恒为 false。
+     *
+     * @param openid 本轮用户标识（仅参与哈希分桶，不出参不入日志）
+     * @return 是否执行生长
+     */
+    private boolean enabled(String openid) {
         return dynamicConfig != null
-                && dynamicConfig.getBoolean(ConfigKeys.MEMORY_GROWTH_ENABLED, false);
+                && dynamicConfig.getBoolean(ConfigKeys.MEMORY_GROWTH_ENABLED, false)
+                && grayRelease.isHit(GrayFeature.MEMORY_GROWTH, openid);
     }
 
     private int maxItems() {

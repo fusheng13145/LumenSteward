@@ -5,6 +5,8 @@ import com.lumensteward.clawbot.interfaces.admin.AuditLogController;
 import com.lumensteward.clawbot.interfaces.admin.ConfigController;
 import com.lumensteward.clawbot.interfaces.admin.DashboardController;
 import com.lumensteward.clawbot.interfaces.admin.DoctorController;
+import com.lumensteward.clawbot.interfaces.admin.GrayController;
+import com.lumensteward.clawbot.interfaces.admin.MemoryController;
 import com.lumensteward.clawbot.interfaces.admin.PetController;
 import com.lumensteward.clawbot.interfaces.admin.SessionController;
 import com.lumensteward.clawbot.interfaces.admin.ToolLogController;
@@ -38,7 +40,8 @@ class RbacSurfaceVerificationTest {
     private static final List<Class<?>> CONTROLLERS = List.of(
             ConfigController.class, UserController.class, PetController.class,
             SessionController.class, ToolLogController.class, DashboardController.class,
-            AuditLogController.class, DoctorController.class, WechatCallbackController.class);
+            AuditLogController.class, DoctorController.class, WechatCallbackController.class,
+            MemoryController.class, GrayController.class);
 
     private static String basePath(Class<?> type) {
         RequestMapping mapping = type.getAnnotation(RequestMapping.class);

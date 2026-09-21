@@ -171,6 +171,38 @@ class ConfigAdminServiceTest {
     }
 
     @Test
+    @DisplayName("FR-22 异常流 2a：灰度比例 > 100 直接拒绝（不放行越界配置）")
+    void shouldRejectGrayPercentAboveHundred() {
+        when(mapper.selectOne(any())).thenReturn(entity("gray.memory_growth.percent", "100", "INT"));
+
+        assertThatThrownBy(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("gray.memory_growth.percent", "101")),
+                "放量", 1L, "127.0.0.1"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("灰度比例必须在 0~100 之间");
+        verify(mapper, never()).updateById(any(SysConfigEntity.class));
+        verify(cache, never()).invalidate("gray.memory_growth.percent");
+    }
+
+    @Test
+    @DisplayName("FR-22 异常流 2a：灰度比例为负数同样拒绝；0 与 100 是合法边界（回滚/全量）")
+    void shouldRejectNegativeAndAcceptGrayBounds() {
+        when(mapper.selectOne(any())).thenReturn(entity("gray.memory_growth.percent", "100", "INT"));
+
+        assertThatThrownBy(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("gray.memory_growth.percent", "-1")),
+                "放量", 1L, "127.0.0.1"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("灰度比例必须在 0~100 之间");
+
+        service.update(List.of(new ConfigAdminService.ConfigItem("gray.memory_growth.percent", "0")),
+                "熔断回滚", 1L, "127.0.0.1");
+        service.update(List.of(new ConfigAdminService.ConfigItem("gray.memory_growth.percent", "100")),
+                "全量放开", 1L, "127.0.0.1");
+        verify(cache, org.mockito.Mockito.times(2)).invalidate("gray.memory_growth.percent");
+    }
+
+    @Test
     @DisplayName("恢复默认值：写回 default_value 并失效缓存")
     void shouldResetToDefault() {
         SysConfigEntity entity = entity("llm.model", "gpt-4o-mini", "STRING");

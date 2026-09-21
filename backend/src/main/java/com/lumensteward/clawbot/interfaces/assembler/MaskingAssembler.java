@@ -1,5 +1,7 @@
 package com.lumensteward.clawbot.interfaces.assembler;
 
+import com.lumensteward.clawbot.application.gray.GrayFeature;
+import com.lumensteward.clawbot.application.gray.GrayReleaseService;
 import com.lumensteward.clawbot.common.api.PageResult;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.model.PetProfileView;
@@ -12,6 +14,7 @@ import com.lumensteward.clawbot.infrastructure.persistence.entity.WxSessionEntit
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxUserEntity;
 import com.lumensteward.clawbot.interfaces.dto.audit.AuditLogVO;
 import com.lumensteward.clawbot.interfaces.dto.config.ConfigVO;
+import com.lumensteward.clawbot.interfaces.dto.gray.GrayPreviewVO;
 import com.lumensteward.clawbot.interfaces.dto.memory.MemoryItemVO;
 import com.lumensteward.clawbot.interfaces.dto.pet.PetVO;
 import com.lumensteward.clawbot.interfaces.dto.session.MessageVO;
@@ -182,6 +185,20 @@ public class MaskingAssembler {
                 entity.getExtractor(), entity.getConfidence(), entity.getSourceSessionId(),
                 entity.getSourceTraceId(), entity.getStatus(), entity.getSupersedesId(),
                 entity.getHitCount(), entity.getFirstSeenAt(), entity.getLastSeenAt());
+    }
+
+    /**
+     * 灰度命中预览 → 视图（FR-22 / W2）；原始 openid 只以脱敏形态回显（BR-21）。
+     *
+     * @param feature   灰度功能
+     * @param rawOpenid 原始用户标识（仅用于脱敏展示，不参与判定）
+     * @param decision  判定明细
+     * @return 视图
+     */
+    public GrayPreviewVO toGrayPreviewVO(GrayFeature feature, String rawOpenid,
+                                         GrayReleaseService.Decision decision) {
+        return new GrayPreviewVO(feature.code(), feature.label(), MaskUtils.openid(rawOpenid),
+                decision.percent(), decision.bucket(), decision.hit(), decision.reason());
     }
 
     /**

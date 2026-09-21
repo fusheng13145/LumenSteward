@@ -2,6 +2,7 @@ package com.lumensteward.clawbot.application.memory;
 
 import com.lumensteward.clawbot.application.config.ConfigKeys;
 import com.lumensteward.clawbot.application.config.DynamicConfigService;
+import com.lumensteward.clawbot.application.gray.GrayReleaseService;
 import com.lumensteward.clawbot.domain.memory.MemoryStore;
 import com.lumensteward.clawbot.domain.memory.MemoryWrite;
 import org.junit.jupiter.api.AfterEach;
@@ -36,8 +37,10 @@ class MemoryGrowthListenerTest {
     private final MemoryExtractor extractor = mock(MemoryExtractor.class);
     private final MemoryStore memoryStore = mock(MemoryStore.class);
     private final DynamicConfigService config = mock(DynamicConfigService.class);
+    /** 真实灰度判定（配置仍为桩），确保监听器与灰度闸门的接线本身被验证。 */
+    private final GrayReleaseService grayRelease = new GrayReleaseService(config);
     private final MemoryGrowthListener listener =
-            new MemoryGrowthListener(extractor, memoryStore, config);
+            new MemoryGrowthListener(extractor, memoryStore, config, grayRelease);
 
     @AfterEach
     void tearDown() {
@@ -47,6 +50,7 @@ class MemoryGrowthListenerTest {
     private void enableGrowth() {
         when(config.getBoolean(ConfigKeys.MEMORY_GROWTH_ENABLED, false)).thenReturn(true);
         when(config.getInt(ConfigKeys.MEMORY_GROWTH_MAX_ITEMS, 5)).thenReturn(3);
+        when(config.getInt(ConfigKeys.GRAY_MEMORY_GROWTH_PERCENT, 0)).thenReturn(100);
     }
 
     private static MemoryGrowthNotice notice(String userMessage) {
@@ -108,5 +112,23 @@ class MemoryGrowthListenerTest {
 
         listener.onConversationTurn(notice("第二轮"));
         verify(memoryStore, timeout(3000).atLeast(2)).upsert(any());
+    }
+
+    @Test
+    @DisplayName("灰度闸门：主开关已开但比例置 0（熔断回滚后）→ 不生长；回到 100 即恢复")
+    void grayRollbackStopsGrowth() {
+        when(config.getBoolean(ConfigKeys.MEMORY_GROWTH_ENABLED, false)).thenReturn(true);
+        when(config.getInt(ConfigKeys.MEMORY_GROWTH_MAX_ITEMS, 5)).thenReturn(3);
+        when(config.getInt(ConfigKeys.GRAY_MEMORY_GROWTH_PERCENT, 0)).thenReturn(0);
+
+        listener.onConversationTurn(notice("我妈住在北京"));
+        verify(extractor, after(500).never()).extract(any(), anyInt());
+
+        when(config.getInt(ConfigKeys.GRAY_MEMORY_GROWTH_PERCENT, 0)).thenReturn(100);
+        when(extractor.extract(any(), anyInt())).thenReturn(List.of(candidate("妈妈")));
+        when(memoryStore.upsert(any())).thenReturn(MemoryStore.WriteOutcome.CREATED);
+
+        listener.onConversationTurn(notice("我妈住在北京"));
+        verify(memoryStore, timeout(3000)).upsert(any());
     }
 }

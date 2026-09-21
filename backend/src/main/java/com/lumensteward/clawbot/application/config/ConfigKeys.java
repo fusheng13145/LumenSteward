@@ -84,6 +84,29 @@ public final class ConfigKeys {
     /** 召回注入最大字符数（W6，防上下文挤占）。 */
     public static final String MEMORY_RECALL_MAX_CHARS = "memory.recall.max-chars";
 
+    // ===== 灰度开关与熔断回滚（FR-22 / 迭代 4 W2）=====
+
+    /** 状态库生长的灰度比例（0~100；100=全量，0=灰度关闭含白名单）。 */
+    public static final String GRAY_MEMORY_GROWTH_PERCENT = "gray.memory_growth.percent";
+
+    /** 状态库生长的灰度白名单（逗号分隔 openid，优先于比例命中）。 */
+    public static final String GRAY_MEMORY_GROWTH_WHITELIST = "gray.memory_growth.whitelist";
+
+    /** 灰度熔断开关（默认开；关闭后不再自动回滚，仅保留手动回滚）。 */
+    public static final String GRAY_BREAKER_ENABLED = "gray.breaker.enabled";
+
+    /** 熔断观测窗口（分钟）。 */
+    public static final String GRAY_BREAKER_WINDOW_MINUTES = "gray.breaker.window-minutes";
+
+    /** 熔断最小样本数（窗口内链路轮次不足则不回滚，避免冷启动误熔断）。 */
+    public static final String GRAY_BREAKER_MIN_SAMPLES = "gray.breaker.min-samples";
+
+    /** 熔断错误率阈值（百分比 0~100，窗口内 L2~L4 异常数 / 链路轮次）。 */
+    public static final String GRAY_BREAKER_ERROR_RATE_PERCENT = "gray.breaker.error-rate-percent";
+
+    /** 熔断 P95 时延阈值（ms，0 表示不启用时延判据）。 */
+    public static final String GRAY_BREAKER_P95_MS = "gray.breaker.p95-ms";
+
     private ConfigKeys() {
     }
 }

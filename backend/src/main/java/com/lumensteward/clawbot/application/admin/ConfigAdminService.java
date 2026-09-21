@@ -61,6 +61,12 @@ public class ConfigAdminService {
     /** 值类型：密钥。 */
     private static final String TYPE_SECRET = "SECRET";
 
+    /** 灰度配置键前缀（FR-22）。 */
+    private static final String GRAY_KEY_PREFIX = "gray.";
+
+    /** 灰度比例配置键后缀（FR-22 异常流 2a 值域校验）。 */
+    private static final String PERCENT_KEY_SUFFIX = ".percent";
+
     private final SysConfigMapper sysConfigMapper;
     private final AuditLogService auditLogService;
     private final ConfigCacheService configCacheService;
@@ -180,6 +186,23 @@ public class ConfigAdminService {
         }
         if (ConfigKeys.ORCHESTRATION_DISABLED_TOOLS.equals(entity.getConfigKey())) {
             validateDisabledTools(value);
+        }
+        if (entity.getConfigKey().startsWith(GRAY_KEY_PREFIX) && entity.getConfigKey().endsWith(PERCENT_KEY_SUFFIX)) {
+            requireGrayPercent(entity, value);
+        }
+    }
+
+    /**
+     * 灰度比例值域校验（FR-22 异常流 2a：比例 &gt; 100% 属配置错误，直接拒绝）。
+     *
+     * @param entity 配置实体
+     * @param value  待写入值（已由 {@link #requireInt} 保证为整数）
+     */
+    private static void requireGrayPercent(SysConfigEntity entity, String value) {
+        int percent = Integer.parseInt(value.trim());
+        if (percent < 0 || percent > 100) {
+            throw BizException.of(ErrorCode.PARAM_INVALID,
+                    "灰度比例必须在 0~100 之间，实际为: " + entity.getConfigKey() + "=" + percent);
         }
     }
 
