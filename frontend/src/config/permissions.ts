@@ -41,6 +41,8 @@ export const PERMISSIONS = {
   MEMORY_VIEW: 'memory:view',
   /** 个人状态库纠错删除（W6-b；SUPER_ADMIN 独占，后端独立鉴权兜底） */
   MEMORY_DELETE: 'memory:delete',
+  /** 合规报告导出（B-5/W4 前端入口；SUPER_ADMIN 独占，与后端 @PreAuthorize 同口径） */
+  COMPLIANCE_EXPORT: 'compliance:export',
 } as const
 
 /** 权限码字面量联合类型 */
@@ -91,6 +93,7 @@ export const MENU_PERMISSIONS: Record<string, PermissionCode> = {
   'monitor-console': PERMISSIONS.MONITOR_VIEW,
   profiles: PERMISSIONS.PROFILE_HISTORY,
   memories: PERMISSIONS.MEMORY_VIEW,
+  'compliance-export': PERMISSIONS.COMPLIANCE_EXPORT,
 }
 
 /**

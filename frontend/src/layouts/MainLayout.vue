@@ -34,6 +34,7 @@ const allMenus: MenuItem[] = [
   { key: 'monitor-console', label: '实时观测台', to: '/monitor/console' },
   { key: 'profiles', label: '档案变更留痕', to: '/profiles/history' },
   { key: 'memories', label: '个人状态库', to: '/memories' },
+  { key: 'compliance-export', label: '合规报告导出', to: '/compliance/export' },
 ]
 
 const visibleMenus = computed(() => allMenus.filter((m) => hasMenuPermission(auth.role, m.key)))
