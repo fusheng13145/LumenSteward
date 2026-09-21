@@ -4,6 +4,7 @@ import com.lumensteward.clawbot.common.api.PageResult;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.model.PetProfileView;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.AuditLogEntity;
+import com.lumensteward.clawbot.infrastructure.persistence.entity.MemoryItemEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.SysConfigEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxMessageEntity;
@@ -11,6 +12,7 @@ import com.lumensteward.clawbot.infrastructure.persistence.entity.WxSessionEntit
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxUserEntity;
 import com.lumensteward.clawbot.interfaces.dto.audit.AuditLogVO;
 import com.lumensteward.clawbot.interfaces.dto.config.ConfigVO;
+import com.lumensteward.clawbot.interfaces.dto.memory.MemoryItemVO;
 import com.lumensteward.clawbot.interfaces.dto.pet.PetVO;
 import com.lumensteward.clawbot.interfaces.dto.session.MessageVO;
 import com.lumensteward.clawbot.interfaces.dto.session.SessionVO;
@@ -163,6 +165,23 @@ public class MaskingAssembler {
         return new PetVO(view.id(), MaskUtils.openid(view.openid()), view.petName(), view.petType(),
                 view.breed(), view.gender(), view.birthday(), view.weightKg(), view.personality(),
                 view.notes(), view.createdAt(), view.updatedAt());
+    }
+
+    /**
+     * 状态库条目 → 视图（W6-b）。
+     *
+     * @param entity 条目实体
+     * @return 视图
+     */
+    public MemoryItemVO toMemoryItemVO(MemoryItemEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        return new MemoryItemVO(entity.getId(), MaskUtils.openid(entity.getOpenid()),
+                entity.getKind(), entity.getName(), entity.getContent(), entity.getOrigin(),
+                entity.getExtractor(), entity.getConfidence(), entity.getSourceSessionId(),
+                entity.getSourceTraceId(), entity.getStatus(), entity.getSupersedesId(),
+                entity.getHitCount(), entity.getFirstSeenAt(), entity.getLastSeenAt());
     }
 
     /**

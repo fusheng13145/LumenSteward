@@ -157,6 +157,52 @@ export const SESSION_STATE = {
   DEGRADED: 'DEGRADED',
 } as const
 
+// ===== 状态库条目类型（对齐 biz_memory_item.kind COMMENT，与后端 MemoryKind 同源，W6/W6-b） =====
+export const MEMORY_KIND = {
+  /** 人物 */
+  PERSON: 'PERSON',
+  /** 地点 */
+  PLACE: 'PLACE',
+  /** 事物 */
+  THING: 'THING',
+  /** 偏好 */
+  PREFERENCE: 'PREFERENCE',
+  /** 惯例 */
+  HABIT: 'HABIT',
+  /** 事实 */
+  FACT: 'FACT',
+} as const
+
+/** 状态库条目类型中文名 */
+export const MEMORY_KIND_LABELS: Record<string, string> = {
+  PERSON: '人物',
+  PLACE: '地点',
+  THING: '事物',
+  PREFERENCE: '偏好',
+  HABIT: '惯例',
+  FACT: '事实',
+}
+
+// ===== 状态库条目状态（对齐 biz_memory_item.status，与后端 MemoryStatus 同源） =====
+export const MEMORY_STATUS = {
+  /** 生效事实 */
+  ACTIVE: 'ACTIVE',
+  /** 已被新值覆盖的历史 */
+  SUPERSEDED: 'SUPERSEDED',
+} as const
+
+/** 状态库条目状态中文名 */
+export const MEMORY_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: '生效',
+  SUPERSEDED: '已覆盖',
+}
+
+/** 状态库条目来源中文名（origin：AUTO_EXTRACT 已用 / TOOL 预留，§2.19） */
+export const MEMORY_ORIGIN_LABELS: Record<string, string> = {
+  AUTO_EXTRACT: '自动抽取',
+  TOOL: '工具写入',
+}
+
 // ===== 分页契约（与后端 PageQuery/PageResult 同源，G-10/G-25） =====
 export const PAGE = {
   /** 默认页码 */

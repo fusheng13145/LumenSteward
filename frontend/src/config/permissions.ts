@@ -37,6 +37,10 @@ export const PERMISSIONS = {
   PROFILE_HISTORY: 'profile:history',
   /** 任务手动放弃（FR-24 / 迭代 3 Wave 2 T8；OPERATOR+，AUDITOR 不可） */
   TASK_ABANDON: 'task:abandon',
+  /** 个人状态库查看（W6-b；口径同监控只读，三角色可读） */
+  MEMORY_VIEW: 'memory:view',
+  /** 个人状态库纠错删除（W6-b；SUPER_ADMIN 独占，后端独立鉴权兜底） */
+  MEMORY_DELETE: 'memory:delete',
 } as const
 
 /** 权限码字面量联合类型 */
@@ -60,6 +64,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.PROFILE_HISTORY,
     PERMISSIONS.DOCTOR_VIEW,
     PERMISSIONS.TASK_ABANDON,
+    PERMISSIONS.MEMORY_VIEW,
   ],
   // 审计员：日志与统计只读；不可修改任何业务数据
   AUDITOR: [
@@ -70,6 +75,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, PermissionCode[]> = {
     PERMISSIONS.AUDIT_VIEW,
     PERMISSIONS.MONITOR_VIEW,
     PERMISSIONS.DOCTOR_VIEW,
+    PERMISSIONS.MEMORY_VIEW,
   ],
 }
 
@@ -84,6 +90,7 @@ export const MENU_PERMISSIONS: Record<string, PermissionCode> = {
   monitor: PERMISSIONS.MONITOR_VIEW,
   'monitor-console': PERMISSIONS.MONITOR_VIEW,
   profiles: PERMISSIONS.PROFILE_HISTORY,
+  memories: PERMISSIONS.MEMORY_VIEW,
 }
 
 /**

@@ -93,6 +93,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/profile/history.vue'),
         meta: { title: '档案变更留痕', requiresAuth: true, requiredPermission: 'profile:history' },
       },
+      {
+        path: 'memories',
+        name: 'memories',
+        component: () => import('@/views/memory/index.vue'),
+        meta: { title: '个人状态库', requiresAuth: true, requiredPermission: 'memory:view' },
+      },
     ],
   },
   {
@@ -108,7 +114,7 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   const appTitle = import.meta.env.VITE_APP_TITLE || '衔光管家'
   document.title = to.meta.title ? `${to.meta.title} · ${appTitle}` : appTitle
@@ -121,6 +127,18 @@ router.beforeEach((to) => {
   // 未登录 → 跳登录并携带 redirect 回跳路径（G-24 同源约定）
   if (!auth.isAuthenticated) {
     return { path: '/login', query: { redirect: to.fullPath } }
+  }
+
+  // 硬刷新时仅令牌从 localStorage 恢复，角色为空串；须先取回身份再判权限，
+  // 否则下面的权限检查对任何受限路由都失败并回退 /dashboard——而 /dashboard
+  // 自身同样失败——形成守卫无限重定向（既有缺陷，深链/刷新即触发）。
+  // 令牌失效时此处失败 → 回落登录页（axios 拦截器的 401 处理为兜底）。
+  if (!auth.role) {
+    try {
+      await auth.fetchInfo()
+    } catch {
+      return { path: '/login', query: { redirect: to.fullPath } }
+    }
   }
 
   // 已登录但无权限 → 回退到看板（后端仍会独立鉴权）
