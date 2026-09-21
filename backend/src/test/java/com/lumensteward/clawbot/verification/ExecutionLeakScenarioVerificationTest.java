@@ -30,6 +30,7 @@ import com.lumensteward.clawbot.infrastructure.config.properties.OrchestrationPr
 import com.lumensteward.clawbot.infrastructure.config.properties.SafetyProperties;
 import com.lumensteward.clawbot.infrastructure.observability.TraceContext;
 import com.lumensteward.clawbot.infrastructure.persistence.service.ToolCallLogService;
+import com.lumensteward.clawbot.support.ToolRegistries;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -148,7 +149,8 @@ class ExecutionLeakScenarioVerificationTest {
         OrchestrationProperties orchestration = new OrchestrationProperties(2, 3, 25000, 8000, 1, Set.of());
         LlmProperties llmProperties = new LlmProperties("mock", "", "", "mock-model", "", 15, 20, 8000, 1000);
         SafetyProperties safety = new SafetyProperties("classpath:none/x.txt", true, false);
-        ConsistencyChecker checker = new RuleBasedConsistencyChecker(new ActionClaimExtractor(), safety);
+        ConsistencyChecker checker = new RuleBasedConsistencyChecker(
+                new ActionClaimExtractor(ToolRegistries.productionTools()), safety);
         ContentSafetyService passSafety = text -> SafetyVerdict.pass();
         return new AgentOrchestratorImpl(llm, new ToolRegistry(List.of()),
                 new InMemoryContextStore(), new ContextTrimmer(new HeuristicTokenEstimator()),

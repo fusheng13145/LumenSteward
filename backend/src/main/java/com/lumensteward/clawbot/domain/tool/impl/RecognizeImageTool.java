@@ -3,6 +3,7 @@ package com.lumensteward.clawbot.domain.tool.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumensteward.clawbot.common.util.JsonUtils;
+import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.model.PetProfileView;
 import com.lumensteward.clawbot.domain.port.VisionPort;
 import com.lumensteward.clawbot.domain.port.VisionPortException;
@@ -16,6 +17,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+
+import java.util.Set;
 
 /**
  * 图片识别工具（架构 5.1 / SRS FR-10 / FR-06，name=recognize_image）。
@@ -92,6 +95,21 @@ public class RecognizeImageTool implements Tool {
     @Override
     public boolean critical() {
         return false;
+    }
+
+    @Override
+    public Set<String> claimKeywords() {
+        return Set.of("识别", "图片");
+    }
+
+    @Override
+    public String monitorDomain() {
+        return "image_recognition";
+    }
+
+    @Override
+    public IntentType taskIntent() {
+        return IntentType.IMAGE;
     }
 
     @Override

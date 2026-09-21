@@ -107,7 +107,7 @@ class TaskSessionOrchestrationIntegrationTest {
 
         IntentClassifier classifier = (history, message) -> IntentResult.unknown();
         TaskSessionServiceImpl taskService = new TaskSessionServiceImpl(
-                taskStore, mock(WxSessionMapper.class), new RuleBasedSlotFiller(), classifier, null);
+                taskStore, mock(WxSessionMapper.class), new RuleBasedSlotFiller(), classifier, null, registry);
 
         return new AgentOrchestratorImpl(llm, registry, new InMemoryContextStore(),
                 new ContextTrimmer(new HeuristicTokenEstimator()), PASS_CHECKER, PASS_SAFETY,

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumensteward.clawbot.common.util.JsonUtils;
 import com.lumensteward.clawbot.common.util.MaskUtils;
+import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.port.ExpressQueryException;
 import com.lumensteward.clawbot.domain.port.ExpressQueryPort;
 import com.lumensteward.clawbot.domain.port.model.ExpressTrace;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 快递查询工具（架构 5.1 / SRS FR-12，name=query_express）。
@@ -88,6 +90,21 @@ public class QueryExpressTool implements Tool {
     @Override
     public boolean critical() {
         return false;
+    }
+
+    @Override
+    public Set<String> claimKeywords() {
+        return Set.of("查询", "物流", "轨迹", "快递", "签收");
+    }
+
+    @Override
+    public String monitorDomain() {
+        return "express";
+    }
+
+    @Override
+    public IntentType taskIntent() {
+        return IntentType.EXPRESS;
     }
 
     @Override

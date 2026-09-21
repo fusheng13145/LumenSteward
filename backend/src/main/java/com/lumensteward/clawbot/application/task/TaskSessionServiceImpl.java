@@ -8,6 +8,7 @@ import com.lumensteward.clawbot.domain.intent.IntentResult;
 import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.model.TaskContext;
 import com.lumensteward.clawbot.domain.task.TaskStore;
+import com.lumensteward.clawbot.domain.tool.ToolRegistry;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.WxSessionEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.WxSessionMapper;
 import org.redisson.api.RLock;
@@ -73,19 +74,14 @@ public class TaskSessionServiceImpl implements TaskSessionService {
             "pet_type", "宠物类型",
             "action", "要执行的操作");
 
-    /** 工具名 → 意图（话题切换判定：追问回复落到其他意图即视为切换）。 */
-    private static final Map<String, IntentType> TASK_INTENTS = Map.of(
-            "query_express", IntentType.EXPRESS,
-            "manage_pet_profile", IntentType.PET_PROFILE,
-            "plan_route", IntentType.NAVIGATION,
-            "synthesize_voice", IntentType.TTS,
-            "recognize_image", IntentType.IMAGE);
-
     private final TaskStore store;
     private final WxSessionMapper sessionMapper;
     private final SlotFiller slotFiller;
     private final IntentClassifier intentClassifier;
     private final RedissonClient redissonClient;
+
+    /** 「工具名 → 意图」由工具自述后经注册表反查（FR-23：新增工具零改本类）。 */
+    private final ToolRegistry toolRegistry;
     private final Clock clock;
 
     /**
@@ -96,11 +92,14 @@ public class TaskSessionServiceImpl implements TaskSessionService {
      * @param slotFiller       槽位填充器
      * @param intentClassifier 意图分类器（话题切换判定）
      * @param redissonClient   Redisson 客户端（分布式锁；可为 null）
+     * @param toolRegistry     工具注册表（意图归因反查）
      */
     @Autowired
     public TaskSessionServiceImpl(TaskStore store, WxSessionMapper sessionMapper, SlotFiller slotFiller,
-                                  IntentClassifier intentClassifier, RedissonClient redissonClient) {
-        this(store, sessionMapper, slotFiller, intentClassifier, redissonClient, Clock.systemUTC());
+                                  IntentClassifier intentClassifier, RedissonClient redissonClient,
+                                  ToolRegistry toolRegistry) {
+        this(store, sessionMapper, slotFiller, intentClassifier, redissonClient, toolRegistry,
+                Clock.systemUTC());
     }
 
     /**
@@ -111,15 +110,18 @@ public class TaskSessionServiceImpl implements TaskSessionService {
      * @param slotFiller       槽位填充器
      * @param intentClassifier 意图分类器
      * @param redissonClient   Redisson 客户端（可为 null）
+     * @param toolRegistry     工具注册表（话题切换判定所需的意图反查）
      * @param clock            时钟
      */
     public TaskSessionServiceImpl(TaskStore store, WxSessionMapper sessionMapper, SlotFiller slotFiller,
-                                  IntentClassifier intentClassifier, RedissonClient redissonClient, Clock clock) {
+                                  IntentClassifier intentClassifier, RedissonClient redissonClient,
+                                  ToolRegistry toolRegistry, Clock clock) {
         this.store = store;
         this.sessionMapper = sessionMapper;
         this.slotFiller = slotFiller;
         this.intentClassifier = intentClassifier;
         this.redissonClient = redissonClient;
+        this.toolRegistry = toolRegistry;
         this.clock = clock == null ? Clock.systemUTC() : clock;
     }
 
@@ -450,7 +452,7 @@ public class TaskSessionServiceImpl implements TaskSessionService {
                 || intent.intent() == IntentType.UNKNOWN || intent.lowConfidence()) {
             return false;
         }
-        IntentType taskIntent = TASK_INTENTS.get(taskType);
+        IntentType taskIntent = toolRegistry.taskIntentOf(taskType);
         if (taskIntent == null) {
             return false;
         }

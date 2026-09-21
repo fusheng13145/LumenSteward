@@ -9,6 +9,7 @@ import com.lumensteward.clawbot.application.safety.RuleBasedConsistencyChecker;
 import com.lumensteward.clawbot.common.enums.ToolStatus;
 import com.lumensteward.clawbot.common.util.JsonUtils;
 import com.lumensteward.clawbot.infrastructure.config.properties.SafetyProperties;
+import com.lumensteward.clawbot.support.ToolRegistries;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConsistencyCheckHallucinationTest {
 
     private final RuleBasedConsistencyChecker checker = new RuleBasedConsistencyChecker(
-            new ActionClaimExtractor(),
+            new ActionClaimExtractor(ToolRegistries.productionTools()),
             new SafetyProperties("classpath:safety/wordlist.txt", true, false));
 
     @Test

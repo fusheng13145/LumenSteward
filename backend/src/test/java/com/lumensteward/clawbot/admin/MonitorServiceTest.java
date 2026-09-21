@@ -7,6 +7,7 @@ import com.lumensteward.clawbot.application.admin.ToolLogQueryService;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.AnomalyEventMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.AuditLogMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
+import com.lumensteward.clawbot.support.ToolRegistries;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +38,7 @@ class MonitorServiceTest {
     private final AnomalyEventMapper anomalyEventMapper = mock(AnomalyEventMapper.class);
 
     private final MonitorService service = new MonitorService(dashboardService, toolLogQueryService,
-            toolCallLogMapper, auditLogMapper, anomalyEventMapper);
+            toolCallLogMapper, auditLogMapper, anomalyEventMapper, ToolRegistries.productionTools());
 
     @Test
     @DisplayName("概览：复用 DashboardService 计数并补以平均耗时")

@@ -17,6 +17,27 @@ rules:
     finishReason: stop
     content: '{"items":[{"kind":"PERSON","name":"妈妈","content":"住在北京，喜欢喝绿茶","confidence":0.8},{"kind":"PREFERENCE","name":"饮品","content":"偏好无糖茶饮","confidence":0.7}]}'
 
+  # ---- FR-23 示例插件 query_weather：运行期取证入口（见手册 §7.14） ----
+  # 除本条与下面一条「规则数据」外，新增该工具未改动任何既有文件：
+  # 编排器只认注册表，Prompt 由 enabledSchemas 动态下发，故对话引擎与 Prompt 文件零改动。
+  # 匹配词刻意用「查天气」而非「天气」：后者会抢走 W6 用例的「今天天气怎么样」默认回复。
+  - name: weather-toolcall
+    round: 0
+    match: "查天气"
+    finishReason: tool_calls
+    toolCalls:
+      - id: mock-call-weather
+        type: function
+        name: query_weather
+        arguments: '{"city":"杭州"}'
+
+  # 必须排在 pet-after-tool 之前：同为 round 1，先匹配者命中
+  - name: weather-after-tool
+    round: 1
+    match: "查天气"
+    finishReason: stop
+    content: "杭州今天晴，26℃（演示数据集样例，非真实预报）。"
+
   # ---- 宠物档案：本轮发起工具调用（第 0 轮） ----
   - name: pet-create-toolcall
     round: 0

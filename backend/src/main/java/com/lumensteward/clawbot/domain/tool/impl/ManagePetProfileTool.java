@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumensteward.clawbot.common.error.ErrorCode;
 import com.lumensteward.clawbot.common.exception.BizException;
 import com.lumensteward.clawbot.common.util.JsonUtils;
+import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.model.PetProfileCommand;
 import com.lumensteward.clawbot.domain.model.PetProfilePatch;
 import com.lumensteward.clawbot.domain.model.PetProfileView;
@@ -21,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 宠物档案工具（架构 5.1 / SRS FR-14，附录 B-5，MVP <b>唯一</b>真实工具）。
@@ -90,6 +92,21 @@ public class ManagePetProfileTool implements Tool {
     @Override
     public boolean critical() {
         return true;
+    }
+
+    @Override
+    public Set<String> claimKeywords() {
+        return Set.of("记录", "保存", "更新", "删除", "档案", "登记");
+    }
+
+    @Override
+    public String monitorDomain() {
+        return "pet_profile";
+    }
+
+    @Override
+    public IntentType taskIntent() {
+        return IntentType.PET_PROFILE;
     }
 
     @Override

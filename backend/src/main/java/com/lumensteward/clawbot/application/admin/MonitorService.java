@@ -3,6 +3,7 @@ package com.lumensteward.clawbot.application.admin;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.lumensteward.clawbot.common.enums.ToolStatus;
+import com.lumensteward.clawbot.domain.tool.ToolRegistry;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.AnomalyEventEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.AuditLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
@@ -73,6 +74,7 @@ public class MonitorService {
     private final ToolCallLogMapper toolCallLogMapper;
     private final AuditLogMapper auditLogMapper;
     private final AnomalyEventMapper anomalyEventMapper;
+    private final ToolRegistry toolRegistry;
 
     /**
      * 构造器注入（G-14）。
@@ -82,17 +84,20 @@ public class MonitorService {
      * @param toolCallLogMapper   工具日志 Mapper（缺口聚合）
      * @param auditLogMapper      审计日志 Mapper（幻觉拦截 / 泄漏计数）
      * @param anomalyEventMapper  四层异常事件 Mapper（L1/L2 埋点，W1）
+     * @param toolRegistry        工具注册表（归因域由工具自述，FR-23）
      */
     public MonitorService(DashboardService dashboardService,
                           ToolLogQueryService toolLogQueryService,
                           ToolCallLogMapper toolCallLogMapper,
                           AuditLogMapper auditLogMapper,
-                          AnomalyEventMapper anomalyEventMapper) {
+                          AnomalyEventMapper anomalyEventMapper,
+                          ToolRegistry toolRegistry) {
         this.dashboardService = dashboardService;
         this.toolLogQueryService = toolLogQueryService;
         this.toolCallLogMapper = toolCallLogMapper;
         this.auditLogMapper = auditLogMapper;
         this.anomalyEventMapper = anomalyEventMapper;
+        this.toolRegistry = toolRegistry;
     }
 
     /**
@@ -161,7 +166,7 @@ public class MonitorService {
      *
      * @param start 下界（可空）
      * @param end   上界（可空）
-     * @return 按固定意图域顺序的分布（缺失域记 0）
+     * @return 分布列表：固定域按 {@code INTENT_ORDER} 顺序在前（缺失记 0），工具新声明的域追加在后
      */
     public List<IntentSlice> intentDistribution(LocalDateTime start, LocalDateTime end) {
         QueryWrapper<ToolCallLogEntity> wrapper = new QueryWrapper<>();
@@ -316,21 +321,14 @@ public class MonitorService {
     /**
      * 工具名 → 业务意图域（可用归因口径，见 {@link #intentDistribution}）。
      *
+     * <p>W3 / FR-23：映射不再写在本类，而由工具经 {@code Tool.monitorDomain()} 自述、注册表反查；
+     * 未注册（如已下线工具的历史日志）或未声明者归入 {@code chat}。
+     *
      * @param toolName 工具名（可空）
      * @return 意图域标签；未匹配归入 {@code chat}
      */
-    private static String mapToolToIntent(String toolName) {
-        if (toolName == null) {
-            return "chat";
-        }
-        return switch (toolName) {
-            case "recognize_image" -> "image_recognition";
-            case "synthesize_voice" -> "tts";
-            case "query_express" -> "express";
-            case "plan_route" -> "navigation";
-            case "manage_pet_profile" -> "pet_profile";
-            default -> "chat";
-        };
+    private String mapToolToIntent(String toolName) {
+        return toolRegistry.monitorDomainOf(toolName);
     }
 
     /**

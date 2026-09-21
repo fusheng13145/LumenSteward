@@ -3,6 +3,7 @@ package com.lumensteward.clawbot.domain.tool.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumensteward.clawbot.common.util.JsonUtils;
+import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.port.MediaDispatchException;
 import com.lumensteward.clawbot.domain.port.MediaDispatchPort;
 import com.lumensteward.clawbot.domain.port.VoiceSynthesisException;
@@ -16,6 +17,8 @@ import com.lumensteward.clawbot.infrastructure.media.MediaTranscodeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+
+import java.util.Set;
 
 /**
  * 语音生成工具（架构 5.1 / SRS FR-11，name=synthesize_voice）。
@@ -89,6 +92,21 @@ public class SynthesizeVoiceTool implements Tool {
     @Override
     public boolean critical() {
         return false;
+    }
+
+    @Override
+    public Set<String> claimKeywords() {
+        return Set.of("发送", "合成", "语音");
+    }
+
+    @Override
+    public String monitorDomain() {
+        return "tts";
+    }
+
+    @Override
+    public IntentType taskIntent() {
+        return IntentType.TTS;
     }
 
     @Override

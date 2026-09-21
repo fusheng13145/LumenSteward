@@ -15,6 +15,7 @@ import com.lumensteward.clawbot.infrastructure.config.properties.SafetyPropertie
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.ToolCallLogMapper;
 import com.lumensteward.clawbot.infrastructure.persistence.service.AuditLogService;
+import com.lumensteward.clawbot.support.ToolRegistries;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +44,8 @@ class ReplayServiceTest {
     private final ToolRegistry registry = mock(ToolRegistry.class);
     private final AuditLogService auditLogService = mock(AuditLogService.class);
     private final RuleBasedConsistencyChecker checker = new RuleBasedConsistencyChecker(
-            new ActionClaimExtractor(), new SafetyProperties("classpath:no-such.txt", true, false));
+            new ActionClaimExtractor(ToolRegistries.productionTools()),
+            new SafetyProperties("classpath:no-such.txt", true, false));
 
     private final ReplayService service =
             new ReplayService(mapper, registry, checker, auditLogService);

@@ -6,6 +6,7 @@ import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.model.TaskContext;
 import com.lumensteward.clawbot.domain.task.TaskStore;
 import com.lumensteward.clawbot.infrastructure.persistence.mapper.WxSessionMapper;
+import com.lumensteward.clawbot.support.ToolRegistries;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,8 @@ class TaskSessionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new TaskSessionServiceImpl(store, sessionMapper, slotFiller, classifier, null, clock);
+        service = new TaskSessionServiceImpl(store, sessionMapper, slotFiller, classifier, null,
+                ToolRegistries.productionTools(), clock);
     }
 
     @Test
@@ -112,7 +114,8 @@ class TaskSessionServiceImplTest {
     void shouldInterruptOnTopicSwitch() {
         IntentClassifier petClassifier =
                 (history, message) -> new IntentResult(IntentType.PET_PROFILE, 0.95, Map.of());
-        service = new TaskSessionServiceImpl(store, sessionMapper, slotFiller, petClassifier, null, clock);
+        service = new TaskSessionServiceImpl(store, sessionMapper, slotFiller, petClassifier, null,
+                ToolRegistries.productionTools(), clock);
         service.createOrUpdate(OPENID, 13L, "query_express", List.of("tracking_no"));
 
         SlotFillOutcome outcome = service.fillSlot(OPENID, "帮我记一下我的猫叫咪咪");

@@ -3,6 +3,7 @@ package com.lumensteward.clawbot.domain.tool.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumensteward.clawbot.common.util.JsonUtils;
+import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.port.MapNavigationPort;
 import com.lumensteward.clawbot.domain.port.model.GeoPoint;
 import com.lumensteward.clawbot.domain.port.model.RouteMode;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 
 /**
  * 导航工具（架构 5.1 / SRS FR-13，name=plan_route）。
@@ -87,6 +89,21 @@ public class PlanRouteTool implements Tool {
     @Override
     public boolean critical() {
         return false;
+    }
+
+    @Override
+    public Set<String> claimKeywords() {
+        return Set.of("规划", "路线", "导航", "全程");
+    }
+
+    @Override
+    public String monitorDomain() {
+        return "navigation";
+    }
+
+    @Override
+    public IntentType taskIntent() {
+        return IntentType.NAVIGATION;
     }
 
     @Override
