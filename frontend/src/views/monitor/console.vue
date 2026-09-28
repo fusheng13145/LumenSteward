@@ -103,8 +103,18 @@ onBeforeUnmount(() => {
   <section>
     <div class="bar">
       <h2>实时观测台</h2>
-      <el-tag :type="statusType(status)" size="small">{{ statusLabel(status) }}</el-tag>
-      <el-button size="small" @click="reconnect">手动重连</el-button>
+      <el-tag
+        :type="statusType(status)"
+        size="small"
+      >
+        {{ statusLabel(status) }}
+      </el-tag>
+      <el-button
+        size="small"
+        @click="reconnect"
+      >
+        手动重连
+      </el-button>
       <span class="count">事件数：{{ events.length }}</span>
     </div>
 
@@ -125,27 +135,70 @@ onBeforeUnmount(() => {
       class="stream"
       :row-class-name="rowClass"
     >
-      <el-table-column prop="id" label="#" width="70" />
-      <el-table-column label="类型" width="130">
+      <el-table-column
+        prop="id"
+        label="#"
+        width="70"
+      />
+      <el-table-column
+        label="类型"
+        width="130"
+      >
         <template #default="{ row }">
-          <el-tag :type="typeTagType(row.type)" size="small">{{ row.type }}</el-tag>
+          <el-tag
+            :type="typeTagType(row.type)"
+            size="small"
+          >
+            {{ row.type }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="traceId" label="链路" min-width="160" show-overflow-tooltip />
-      <el-table-column label="用户" width="140">
-        <template #default="{ row }">{{ row.openid || '—' }}</template>
+      <el-table-column
+        prop="traceId"
+        label="链路"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="用户"
+        width="140"
+      >
+        <template #default="{ row }">
+          {{ row.openid || '—' }}
+        </template>
       </el-table-column>
-      <el-table-column label="工具" width="140">
-        <template #default="{ row }">{{ toolNameOf(row) }}</template>
+      <el-table-column
+        label="工具"
+        width="140"
+      >
+        <template #default="{ row }">
+          {{ toolNameOf(row) }}
+        </template>
       </el-table-column>
-      <el-table-column label="轮次/序号" width="110">
-        <template #default="{ row }">R{{ row.round ?? '-' }} · #{{ row.callSeq ?? '-' }}</template>
+      <el-table-column
+        label="轮次/序号"
+        width="110"
+      >
+        <template #default="{ row }">
+          R{{ row.round ?? '-' }} · #{{ row.callSeq ?? '-' }}
+        </template>
       </el-table-column>
-      <el-table-column label="载荷" min-width="240" show-overflow-tooltip>
-        <template #default="{ row }">{{ payloadText(row) }}</template>
+      <el-table-column
+        label="载荷"
+        min-width="240"
+        show-overflow-tooltip
+      >
+        <template #default="{ row }">
+          {{ payloadText(row) }}
+        </template>
       </el-table-column>
-      <el-table-column label="时间" width="110">
-        <template #default="{ row }">{{ timeText(row.ts) }}</template>
+      <el-table-column
+        label="时间"
+        width="110"
+      >
+        <template #default="{ row }">
+          {{ timeText(row.ts) }}
+        </template>
       </el-table-column>
     </el-table>
   </section>
