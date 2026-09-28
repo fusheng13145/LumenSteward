@@ -53,3 +53,6 @@ desktop.ini
 # ===== 测试与覆盖率产物 =====
 coverage/
 .nyc_output/
+
+# ===== 本机一次性取证产物 =====
+e2e-*.txt

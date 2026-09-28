@@ -21,6 +21,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理（8.6 / G-19）。
@@ -188,6 +189,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleAuthentication(AuthenticationException ex) {
         log.warn("认证失败: {}", ex.getMessage());
         return build(ErrorCode.UNAUTHENTICATED, ErrorCode.UNAUTHENTICATED.getMessage());
+    }
+
+    /**
+     * 静态资源 / 未匹配路径不存在（§7.5 待处理项闭环）。
+     *
+     * <p>Spring 6.1 起，未命中任何控制器且静态资源也不存在的请求抛
+     * {@link NoResourceFoundException}——若不在此显式接住，会落进下方「未预期异常」分支，
+     * 把「路径写错」误报成 500（误导告警与排障方向）。
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNoResourceFound(NoResourceFoundException ex) {
+        log.warn("资源不存在: method={} path={}", ex.getHttpMethod(), ex.getResourcePath());
+        return build(ErrorCode.RESOURCE_NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.getMessage());
     }
 
     /** 兜底：未预期异常一律 500，且不向调用方泄露任何内部细节（G-13）。 */
