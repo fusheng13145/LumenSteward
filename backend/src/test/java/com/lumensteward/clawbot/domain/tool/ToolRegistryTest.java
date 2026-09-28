@@ -68,7 +68,7 @@ class ToolRegistryTest {
         assertThat(registry.names()).containsExactly(QueryWeatherTool.NAME);
         assertThat(registry.find(QueryWeatherTool.NAME)).isPresent();
 
-        List<JsonNode> published = registry.enabledSchemas(Set.of());
+        List<JsonNode> published = registry.dispatchableSchemas(Set.of(), ToolVisibilityContext.of(null));
         assertThat(published).hasSize(1);
         assertThat(published.get(0).path("type").asText()).isEqualTo("function");
         assertThat(published.get(0).path("function").path("name").asText()).isEqualTo(QueryWeatherTool.NAME);
@@ -172,11 +172,91 @@ class ToolRegistryTest {
     void disabledToolsAreNotPublished() {
         ToolRegistry registry = ToolRegistries.productionTools();
 
-        assertThat(registry.enabledSchemas(Set.of(QueryWeatherTool.NAME)))
+        assertThat(registry.dispatchableSchemas(Set.of(QueryWeatherTool.NAME), ToolVisibilityContext.of(null)))
                 .extracting(node -> node.path("function").path("name").asText())
                 .doesNotContain(QueryWeatherTool.NAME)
                 .contains(QueryExpressTool.NAME);
-        assertThat(registry.enabledSchemas(null)).hasSize(registry.size());
+        assertThat(registry.dispatchableSchemas(null, ToolVisibilityContext.of(null)))
+                .hasSize(registry.size());
+    }
+
+    @Test
+    @DisplayName("W10 工具动态可见性：出现条件不满足的工具不进函数 Schema，默认恒可见不受影响")
+    void invisibleToolsAreNotDispatched() {
+        ToolRegistry registry = new ToolRegistry(List.of(new QueryWeatherTool(), new StubTool("legacy_tool", VALID_SCHEMA)));
+
+        // 默认恒可见（BR-32）：最小上下文下两件工具都在
+        assertThat(registry.dispatchableNames(Set.of(), ToolVisibilityContext.of("u1")))
+                .containsExactlyInAnyOrder(QueryWeatherTool.NAME, "legacy_tool");
+
+        // 条件工具仅在 imageCachePresent=true 时出现（W11 识图续接的出现判据）
+        ToolRegistry withConditional = new ToolRegistry(List.of(new ConditionalTool("ask_image")));
+        assertThat(withConditional.dispatchableNames(Set.of(), ToolVisibilityContext.of("u1")))
+                .doesNotContain("ask_image");
+        assertThat(withConditional.dispatchableNames(Set.of(), new ToolVisibilityContext("u1", true)))
+                .containsExactly("ask_image");
+
+        // 不可见工具的 Schema 下发同样被裁剪
+        assertThat(withConditional.dispatchableSchemas(Set.of(), ToolVisibilityContext.of("u1"))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("W10：执行路径与下发路径同判——不可见 / 被禁用的工具解析为空，find 仍可反查自述口径")
+    void findDispatchableSharesPredicateWithDispatch() {
+        ToolRegistry registry = new ToolRegistry(List.of(new ConditionalTool("ask_image")));
+
+        assertThat(registry.findDispatchable("ask_image", Set.of(), ToolVisibilityContext.of("u1"))).isEmpty();
+        assertThat(registry.findDispatchable("ask_image", Set.of(), new ToolVisibilityContext("u1", true)))
+                .isPresent();
+        // 被禁用即使可见也不可执行（FR-18 开关是硬闸门）
+        assertThat(registry.findDispatchable("ask_image", Set.of("ask_image"),
+                new ToolVisibilityContext("u1", true))).isEmpty();
+        // 未注册照常为空
+        assertThat(registry.findDispatchable("ghost_tool", Set.of(), ToolVisibilityContext.of("u1"))).isEmpty();
+
+        // 自述口径反查不受可见性影响：隐藏工具的判定词仍在并集里，
+        // 「声称调用了看不见的工具」才会被一致性校验判为幻觉（而非不认识该声明）
+        assertThat(registry.find("ask_image")).isPresent();
+        assertThat(registry.claimKeywordUniverse()).contains("追问");
+    }
+
+    /** 出现条件工具桩：仅在存在识图缓存时可见（模拟 W11 追问图片工具）。 */
+    private record ConditionalTool(String name) implements Tool {
+
+        @Override
+        public String description() {
+            return "追问图片细节（仅在有可追问图片时出现）";
+        }
+
+        @Override
+        public Set<String> claimKeywords() {
+            return Set.of("追问");
+        }
+
+        @Override
+        public JsonSchema parametersSchema() {
+            return JsonSchema.of("{\"type\":\"object\",\"properties\":{}}");
+        }
+
+        @Override
+        public ToolResult execute(ToolContext context, JsonNode args) {
+            return ToolResult.notExecuted("STUB", "桩工具不执行");
+        }
+
+        @Override
+        public boolean idempotent() {
+            return true;
+        }
+
+        @Override
+        public boolean critical() {
+            return false;
+        }
+
+        @Override
+        public boolean visibleIn(ToolVisibilityContext context) {
+            return context != null && context.imageCachePresent();
+        }
     }
 
     @Test

@@ -20,6 +20,7 @@ import com.lumensteward.clawbot.domain.tool.Tool;
 import com.lumensteward.clawbot.domain.tool.ToolContext;
 import com.lumensteward.clawbot.domain.tool.ToolRegistry;
 import com.lumensteward.clawbot.domain.tool.ToolResult;
+import com.lumensteward.clawbot.domain.tool.ToolVisibilityContext;
 import com.lumensteward.clawbot.infrastructure.client.llm.LlmClient;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ChatMessage;
 import com.lumensteward.clawbot.infrastructure.client.llm.dto.ChatRequest;
@@ -42,7 +43,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Agent Loop 约束测试（AC-B6~B12 / SC-01~SC-05）。
  *
- * <p>覆盖：轮次上限强制收敛（SC-01/SC-04）、单工具超时降级（SC-03 + SC-05 关键工具中断）。
+ * <p>覆盖：轮次上限强制收敛（SC-01/SC-04）、单工具超时降级（SC-03 + SC-05 关键工具中断）、
+ * 编造工具名与不可见工具的 NOT_EXECUTED 回注（BR-10 + W10 工具动态可见性）。
  */
 class AgentLoopConstraintTest {
 
@@ -97,16 +99,52 @@ class AgentLoopConstraintTest {
         assertThat(result.executedTools().get(0).toolName()).isEqualTo("ghost_tool");
     }
 
+    @Test
+    @DisplayName("W10 ①：出现条件不满足的工具不进入函数 Schema（下发集随上下文收敛）")
+    void shouldNotPublishInvisibleToolSchema() {
+        TestTool hidden = new TestTool("hidden_tool", false, 0L, false);
+        TestTool visible = new TestTool(TOOL_NAME, false, 0L);
+        StubLlmClient llm = new StubLlmClient(List.of(ChatResult.text("直接回答")));
+
+        AgentOrchestratorImpl orchestrator = buildOrchestrator(llm, List.of(visible, hidden), ROUND_CAP, 8000);
+        orchestrator.run(request());
+
+        assertThat(llm.lastToolNames()).containsExactly(TOOL_NAME).doesNotContain("hidden_tool");
+    }
+
+    @Test
+    @DisplayName("W10 ②：模型编造调用不可见工具 → 按未注册 NOT_EXECUTED，不真实执行")
+    void shouldNotExecuteInvisibleTool() {
+        TestTool hidden = new TestTool("hidden_tool", false, 0L, false);
+        // 模型（因历史上下文或幻觉）调用了一个本轮不可见的工具：与编造工具名同路径
+        StubLlmClient llm = new StubLlmClient(List.of(
+                new ChatResult(null, List.of(ToolCall.function("h1", "hidden_tool", "{}")),
+                        null, "tool_calls", null),
+                ChatResult.text("抱歉，我没有这个能力。")));
+
+        AgentOrchestratorImpl orchestrator = buildOrchestrator(llm, hidden, ROUND_CAP, 8000);
+        OrchestrationResult result = orchestrator.run(request());
+
+        assertThat(result.executedTools()).hasSize(1);
+        assertThat(result.executedTools().get(0).status()).isEqualTo(ToolStatus.NOT_EXECUTED);
+        assertThat(result.executedTools().get(0).toolName()).isEqualTo("hidden_tool");
+    }
+
     private OrchestrationRequest request() {
         return new OrchestrationRequest("trace-1", "openid-test", 1L, "帮我查一下", List.of());
     }
 
     private AgentOrchestratorImpl buildOrchestrator(LlmClient llm, Tool tool, int maxRounds, int toolTimeoutMs) {
+        return buildOrchestrator(llm, List.of(tool), maxRounds, toolTimeoutMs);
+    }
+
+    private AgentOrchestratorImpl buildOrchestrator(LlmClient llm, List<Tool> tools, int maxRounds,
+                                                    int toolTimeoutMs) {
         OrchestrationProperties orchestration = new OrchestrationProperties(
                 maxRounds, 3, 25000, toolTimeoutMs, 1, Set.of());
         LlmProperties llmProperties = new LlmProperties("mock", "", "", "mock-model", "",
                 15, 20, 8000, 1000);
-        return new AgentOrchestratorImpl(llm, new ToolRegistry(List.of(tool)),
+        return new AgentOrchestratorImpl(llm, new ToolRegistry(tools),
                 new InMemoryContextStore(), new ContextTrimmer(new HeuristicTokenEstimator()),
                 PASS_CHECKER, PASS_SAFETY, new DefaultFallbackService(),
                 new NoOpToolCallLogService(), orchestration, llmProperties, null, null);
@@ -122,11 +160,17 @@ class AgentLoopConstraintTest {
         private final String name;
         private final boolean critical;
         private final long delayMs;
+        private final boolean contextVisible;
 
         TestTool(String name, boolean critical, long delayMs) {
+            this(name, critical, delayMs, true);
+        }
+
+        TestTool(String name, boolean critical, long delayMs, boolean contextVisible) {
             this.name = name;
             this.critical = critical;
             this.delayMs = delayMs;
+            this.contextVisible = contextVisible;
         }
 
         @Override
@@ -165,19 +209,33 @@ class AgentLoopConstraintTest {
         public boolean critical() {
             return critical;
         }
+
+        @Override
+        public boolean visibleIn(ToolVisibilityContext context) {
+            return contextVisible;
+        }
     }
 
-    /** 顺序返回预置响应的 LLM 客户端。 */
+    /** 顺序返回预置响应的 LLM 客户端（记录最近一次请求下发的工具集，W10 断言用）。 */
     static class StubLlmClient implements LlmClient {
         private final List<ChatResult> responses;
+        private List<JsonNode> lastTools = List.of();
         private int index = 0;
 
         StubLlmClient(List<ChatResult> responses) {
             this.responses = responses;
         }
 
+        /** 最近一次 chat 请求实际下发的工具名列表。 */
+        List<String> lastToolNames() {
+            return lastTools.stream()
+                    .map(node -> node.path("function").path("name").asText())
+                    .toList();
+        }
+
         @Override
         public ChatResult chat(ChatRequest request) {
+            lastTools = request.tools() == null ? List.of() : request.tools();
             ChatResult result = responses.get(Math.min(index, responses.size() - 1));
             index++;
             return result;

@@ -95,4 +95,19 @@ public interface Tool {
     default IntentType taskIntent() {
         return null;
     }
+
+    /**
+     * 本工具在当前上下文下是否可下发给模型（W10 工具动态可见性 / 轨道 C）。
+     *
+     * <p>默认<b>恒可见</b> = 既有行为零变更（BR-32 向后兼容）：未声明出现条件的工具与 W10 之前
+     * 完全一致。声明了条件的工具在其条件不满足时<b>不进入</b>函数 Schema；即使模型编造调用它，
+     * 也按「工具未注册」走既有异常路径（NOT_EXECUTED 回注，9.4.3），<b>不会被真实执行</b>——
+     * 出现条件因此同时是幻觉面护栏：模型调不动它看不见的工具。
+     *
+     * @param context 本轮可见性判定上下文（编排器构造，见 {@link ToolVisibilityContext}）
+     * @return true 表示可下发；false 表示本轮对模型隐藏
+     */
+    default boolean visibleIn(ToolVisibilityContext context) {
+        return true;
+    }
 }

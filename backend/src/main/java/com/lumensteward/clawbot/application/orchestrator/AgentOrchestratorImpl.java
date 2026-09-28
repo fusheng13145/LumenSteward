@@ -36,6 +36,7 @@ import com.lumensteward.clawbot.domain.tool.Tool;
 import com.lumensteward.clawbot.domain.tool.ToolContext;
 import com.lumensteward.clawbot.domain.tool.ToolRegistry;
 import com.lumensteward.clawbot.domain.tool.ToolResult;
+import com.lumensteward.clawbot.domain.tool.ToolVisibilityContext;
 import com.lumensteward.clawbot.domain.tool.ValidationResult;
 import com.lumensteward.clawbot.application.validation.MessageLengthGuard;
 import com.lumensteward.clawbot.infrastructure.client.llm.LlmClient;
@@ -352,7 +353,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         }
         messages.add(ChatMessage.user(userMessage));
 
-        List<JsonNode> tools = toolRegistry.enabledSchemas(disabledTools());
+        // W10：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」
+        Set<String> disabled = disabledTools();
+        ToolVisibilityContext visibility = ToolVisibilityContext.of(openid);
+        List<JsonNode> tools = toolRegistry.dispatchableSchemas(disabled, visibility);
 
         ChatResult response = null;
         while (round < maxRounds) {
@@ -383,7 +387,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
             for (ToolCall call : calls) {
                 ToolOutcome outcome = executeOne(call, round, callSeq[0] + 1, traceId, openid, sessionId,
-                        executed, trace);
+                        executed, trace, disabled, visibility);
                 callSeq[0]++;
                 messages.add(ChatMessage.tool(call.id(), call.functionName(), outcome.messageContent()));
                 if (outcome.interrupt()) {
@@ -595,18 +599,26 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param sessionId 会话
      * @param executed  已执行记录（收集器）
      * @param trace     链路时序记录器（A-5 / T6）
+     * @param disabled  本链路被禁用工具集合（FR-18，与下发同源）
+     * @param visibility 本链路可见性上下文（W10，与下发同源）
      * @return 执行产物（含回注内容与是否中断）
      */
     private ToolOutcome executeOne(ToolCall call, int round, int callSeq, String traceId, String openid,
-                                   Long sessionId, List<ToolCallRecord> executed, TraceRecorder trace) {
+                                   Long sessionId, List<ToolCallRecord> executed, TraceRecorder trace,
+                                   Set<String> disabled, ToolVisibilityContext visibility) {
         String name = call.functionName();
         JsonNode args = JsonUtils.readTree(call.argumentsJson());
 
-        // 工具未注册（模型编造工具名）：不执行，回注原因（9.4.3 第 25-29 行）
-        java.util.Optional<Tool> toolOpt = toolRegistry.find(name);
+        // 工具不可下发（未注册 / 被禁用 / 本轮不可见，W10）＝ 编造工具名：不执行，回注原因（9.4.3 第 25-29 行）
+        java.util.Optional<Tool> toolOpt = toolRegistry.findDispatchable(name, disabled, visibility);
         if (toolOpt.isEmpty()) {
+            if (toolRegistry.find(name).isPresent()) {
+                // 服务端留痕（不回注模型，避免确认该工具存在）：已注册但本轮被禁用或可见性不满足
+                log.warn("工具已注册但本轮不可下发，按未注册处理: {}（disabled={}，openid 脱敏={}）",
+                        name, disabled, MaskUtils.openid(openid));
+            }
             ToolResult result = ToolResult.notExecuted("TOOL_NOT_FOUND",
-                    "工具未注册，可用工具: " + toolRegistry.names());
+                    "工具未注册，可用工具: " + toolRegistry.dispatchableNames(disabled, visibility));
             recordNotExecuted(call, round, callSeq, traceId, openid, sessionId, executed, result, trace);
             return new ToolOutcome(toToolContent(call.id(), name, result), false, null);
         }

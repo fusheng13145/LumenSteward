@@ -146,17 +146,63 @@ public class ToolRegistry {
     }
 
     /**
-     * 过滤被禁用工具后，生成可下发 LLM 的 OpenAI 工具数组（FR-18 工具开关 / SRS 9.4.2）。
+     * 按「禁用集合 + 可见性上下文」裁剪后，生成可下发 LLM 的 OpenAI 工具数组
+     * （FR-18 工具开关 + W10 工具动态可见性）。
+     *
+     * <p>被禁用或本轮不可见的工具<b>不会</b>出现在函数 Schema 中——下发集随上下文收敛，
+     * 而非注册即全量暴露（W10，母本 M-2 §03-2 教训）。
      *
      * @param disabledTools 被禁用的工具名集合（可为 null）
+     * @param context       本轮可见性判定上下文（可为 null，按最小上下文处理）
      * @return 形如 {@code [{"type":"function","function":{...}}]} 的节点列表
      */
-    public List<JsonNode> enabledSchemas(Set<String> disabledTools) {
+    public List<JsonNode> dispatchableSchemas(Set<String> disabledTools, ToolVisibilityContext context) {
+        return dispatchable(disabledTools, context).map(ToolRegistry::toOpenAiToolNode).toList();
+    }
+
+    /**
+     * 可下发工具名集合（不可变视图，保持注册顺序）。
+     *
+     * <p>对外提示「可用工具」的口径<b>必须</b>用它而非 {@link #names()}——否则会把本轮
+     * 被禁用 / 不可见的工具名泄露给模型，等于教它编造。
+     *
+     * @param disabledTools 被禁用的工具名集合（可为 null）
+     * @param context       本轮可见性判定上下文（可为 null）
+     * @return 可下发工具名集合
+     */
+    public Set<String> dispatchableNames(Set<String> disabledTools, ToolVisibilityContext context) {
+        return dispatchable(disabledTools, context).map(Tool::name)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * 按名解析「可执行」工具：未注册、被禁用或本轮不可见一律返回空（W10）。
+     *
+     * <p>执行路径与下发路径共用同一判定 ⇒ 「模型看不见的工具也调不动」。调用不可下发工具
+     * 按编造工具名走 NOT_EXECUTED 既有异常路径（9.4.3）。
+     *
+     * @param name          工具名
+     * @param disabledTools 被禁用的工具名集合（可为 null）
+     * @param context       本轮可见性判定上下文（可为 null）
+     * @return 命中的工具；否则 {@link Optional#empty()}
+     */
+    public Optional<Tool> findDispatchable(String name, Set<String> disabledTools,
+                                           ToolVisibilityContext context) {
+        Tool tool = tools.get(name);
+        if (tool == null) {
+            return Optional.empty();
+        }
         Set<String> disabled = disabledTools == null ? Set.of() : disabledTools;
+        ToolVisibilityContext ctx = context == null ? ToolVisibilityContext.of(null) : context;
+        return (!disabled.contains(name) && tool.visibleIn(ctx)) ? Optional.of(tool) : Optional.empty();
+    }
+
+    private java.util.stream.Stream<Tool> dispatchable(Set<String> disabledTools,
+                                                       ToolVisibilityContext context) {
+        Set<String> disabled = disabledTools == null ? Set.of() : disabledTools;
+        ToolVisibilityContext ctx = context == null ? ToolVisibilityContext.of(null) : context;
         return tools.values().stream()
-                .filter(tool -> !disabled.contains(tool.name()))
-                .map(ToolRegistry::toOpenAiToolNode)
-                .toList();
+                .filter(tool -> !disabled.contains(tool.name()) && tool.visibleIn(ctx));
     }
 
     private static JsonNode toOpenAiToolNode(Tool tool) {
