@@ -30,6 +30,7 @@ import com.lumensteward.clawbot.common.enums.ToolStatus;
 import com.lumensteward.clawbot.common.util.JsonUtils;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.context.ContextStore;
+import com.lumensteward.clawbot.domain.context.RecentImageStore;
 import com.lumensteward.clawbot.domain.model.TaskContext;
 import com.lumensteward.clawbot.domain.tool.JsonSchema;
 import com.lumensteward.clawbot.domain.tool.Tool;
@@ -111,6 +112,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final TaskSessionService taskSessionService;
     /** 个人状态库召回服务（W6 / §2.19；可为 null，此时本轮不注入长期记忆）。 */
     private final MemoryRecallService memoryRecallService;
+    /** 最近识图缓存（W11 / §7.17；可为 null，此时 ask_image 恒不可见）。 */
+    private final RecentImageStore recentImageStore;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -142,6 +145,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param auditLogService       审计日志服务（执行性幻觉拦截留痕，A-3 / T5；可为 null）
      * @param taskSessionService    任务型多步会话服务（FR-24 / T8；可为 null）
      * @param memoryRecallService   个人状态库召回服务（W6 / §2.19；可为 null，此时不注入长期记忆）
+     * @param recentImageStore      最近识图缓存（W11 / §7.17；可为 null，此时 ask_image 恒不可见）
      */
     @Autowired
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
@@ -158,7 +162,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  ApplicationEventPublisher eventPublisher,
                                  AuditLogService auditLogService,
                                  TaskSessionService taskSessionService,
-                                 MemoryRecallService memoryRecallService) {
+                                 MemoryRecallService memoryRecallService,
+                                 RecentImageStore recentImageStore) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -176,6 +181,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.auditLogService = auditLogService;
         this.taskSessionService = taskSessionService;
         this.memoryRecallService = memoryRecallService;
+        this.recentImageStore = recentImageStore;
     }
 
     /**
@@ -213,7 +219,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
                 contentSafetyService, fallbackService, toolCallLogService,
                 orchestrationProperties, llmProperties, dynamicConfig, costBudgetService,
-                messageLengthGuard, eventPublisher, auditLogService, null, null);
+                messageLengthGuard, eventPublisher, auditLogService, null, null, null);
     }
 
     /**
@@ -353,9 +359,11 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         }
         messages.add(ChatMessage.user(userMessage));
 
-        // W10：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」
+        // W10/W11：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」。
+        // imageCachePresent = 该用户当前是否有可追问的识图缓存（W11；存储不可用按无缓存，fail-open）
         Set<String> disabled = disabledTools();
-        ToolVisibilityContext visibility = ToolVisibilityContext.of(openid);
+        boolean imageCached = recentImageStore != null && recentImageStore.find(openid).isPresent();
+        ToolVisibilityContext visibility = new ToolVisibilityContext(openid, imageCached);
         List<JsonNode> tools = toolRegistry.dispatchableSchemas(disabled, visibility);
 
         ChatResult response = null;

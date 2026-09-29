@@ -55,6 +55,56 @@ rules:
       completion: 55
     content: "杭州今天晴，26℃（演示数据集样例，非真实预报）。"
 
+  # ---- W11 识图缓存与追问续接：图片消息路由 + ask_image 追问（见手册 §7.17） ----
+  # 图片消息由 ImageMessageHandler 合成为「（用户发来一张图片，链接：…）」进入编排，
+  # 模型调用 recognize_image 识别，结论写入识图缓存；追问经 ask_image 免重发图片续接。
+  # ask_image 仅在缓存存在时出现在函数 Schema（W10 visibleIn）——Mock 会校验工具在
+  # 下发集内才发起调用，故「无缓存时追问」自然回落默认文案（负证路径）。
+  - name: image-recognize-toolcall
+    round: 0
+    match: "（用户发来一张图片"
+    finishReason: tool_calls
+    usage:
+      prompt: 660
+      completion: 40
+    toolCalls:
+      - id: mock-call-recognize-image
+        type: function
+        name: recognize_image
+        arguments: '{"scene":"pet","image_url":"from-message"}'
+
+  - name: ask-image-toolcall
+    round: 0
+    match: "它大概多大了"
+    finishReason: tool_calls
+    usage:
+      prompt: 640
+      completion: 35
+    toolCalls:
+      - id: mock-call-ask-image
+        type: function
+        name: ask_image
+        arguments: '{"question":"它大概多大了"}'
+
+  # round 1 带 match 的规则都必须在 pet-after-tool（无 match 兜底）之前
+  - name: image-after-recognize
+    round: 1
+    match: "（用户发来一张图片"
+    finishReason: stop
+    usage:
+      prompt: 800
+      completion: 55
+    content: "（Mock）看过了，是一只橘色的成年短毛猫，毛色干净，体态圆润。想问它什么尽管问～"
+
+  - name: ask-image-after-tool
+    round: 1
+    match: "它大概多大了"
+    finishReason: stop
+    usage:
+      prompt: 820
+      completion: 60
+    content: "（Mock）从图片看，这只橘猫大约 2 岁（基于刚才识别的缓存信息）。"
+
   # ---- 宠物档案：本轮发起工具调用（第 0 轮） ----
   - name: pet-create-toolcall
     round: 0

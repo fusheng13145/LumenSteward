@@ -32,7 +32,7 @@ public class WechatMessageParserImpl implements WechatMessageParser {
     @Override
     public InternalMessage parse(String rawBody, String msgTypeHint) {
         if (rawBody == null || rawBody.isBlank()) {
-            return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null,
+            return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null, null,
                     null, null, 0L, Map.of());
         }
         try {
@@ -43,7 +43,7 @@ public class WechatMessageParserImpl implements WechatMessageParser {
             Document document = builder.parse(new InputSource(new StringReader(rawBody)));
             Element root = document.getDocumentElement();
             if (root == null) {
-                return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null,
+                return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null, null,
                         null, null, 0L, Map.of());
             }
             String openid = text(root, "FromUserName");
@@ -51,6 +51,7 @@ public class WechatMessageParserImpl implements WechatMessageParser {
             String msgId = text(root, "MsgId");
             String content = text(root, "Content");
             String mediaId = text(root, "MediaId");
+            String picUrl = text(root, "PicUrl");
             Double latitude = parseDouble(text(root, "Location_X"));
             Double longitude = parseDouble(text(root, "Location_Y"));
             long createTime = parseLong(text(root, "CreateTime"));
@@ -64,12 +65,12 @@ public class WechatMessageParserImpl implements WechatMessageParser {
             if (eventKey != null) {
                 eventAttributes.put("EventKey", eventKey);
             }
-            return new InternalMessage(openid, normalizeType(msgType), msgId, content, mediaId,
+            return new InternalMessage(openid, normalizeType(msgType), msgId, content, mediaId, picUrl,
                     latitude, longitude, createTime, eventAttributes);
         } catch (Exception e) {
             // 解析失败不抛出：返回带类型提示的空消息，交由上层走默认/兜底（AC-A6 不 500）
             log.warn("微信报文解析失败，回落为空消息: {}", e.getMessage());
-            return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null,
+            return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null, null,
                     null, null, 0L, Map.of());
         }
     }

@@ -81,7 +81,7 @@ class UnknownMsgTypeAnomalyTest {
     }
 
     private static InternalMessage message(String msgType) {
-        return new InternalMessage("openid-unknown-1", msgType, "msg-1", "帮我查快递", null, null,
+        return new InternalMessage("openid-unknown-1", msgType, "msg-1", "帮我查快递", null, null, null,
                 null, System.currentTimeMillis() / 1000, Map.of());
     }
 }

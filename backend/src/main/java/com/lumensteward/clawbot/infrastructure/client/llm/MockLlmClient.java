@@ -64,10 +64,11 @@ public class MockLlmClient implements LlmClient {
 
     @Override
     public VisionResult vision(VisionRequest request) throws LlmException {
-        // MVP 仅契约；返回可预期的确定性结果（BR-09：不臆造真实识别内容）
+        // MVP 仅契约；返回可预期的确定性结果（BR-09：不臆造真实识别内容）。
+        // W11：给出具体的确定性命词与高置信度，使识图缓存 / 追问续接链路有可断言的载体
+        //（低置信会触发「可能/疑似」前缀，追问回复难以对账）。
         String question = request == null ? null : request.question();
-        return new VisionResult("（Mock）我看到的是一张图片。", 0.5,
-                null);
+        return new VisionResult("一只橘色的成年短毛猫，毛色干净，体态圆润", 0.9, null);
     }
 
     @Override

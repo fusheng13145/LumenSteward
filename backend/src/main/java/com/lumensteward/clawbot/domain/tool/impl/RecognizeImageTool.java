@@ -3,8 +3,10 @@ package com.lumensteward.clawbot.domain.tool.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.lumensteward.clawbot.common.util.JsonUtils;
+import com.lumensteward.clawbot.domain.context.RecentImageStore;
 import com.lumensteward.clawbot.domain.intent.IntentType;
 import com.lumensteward.clawbot.domain.model.PetProfileView;
+import com.lumensteward.clawbot.domain.model.RecentImage;
 import com.lumensteward.clawbot.domain.port.VisionPort;
 import com.lumensteward.clawbot.domain.port.VisionPortException;
 import com.lumensteward.clawbot.domain.port.model.VisionResult;
@@ -18,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.Set;
 
 /**
@@ -27,6 +30,10 @@ import java.util.Set;
  * 支持 pet/object/ocr 三类场景；置信度不足一律以"可能/疑似"措辞（AC-FR-10③）；
  * 模糊图（极低置信度）返回 {@code EMPTY_RESULT} 不虚构（BR-09）；pet 场景可经
  * {@link PetProfileService} 由品种/名称反查档案称谓（FR-14 贯通）。
+ *
+ * <p><b>W11 识图缓存：</b>识别成功（非模糊）后把结论按 openid 写入 {@link RecentImageStore}
+ * （覆盖写 = 换图即换缓存），供 {@link AskImageFollowupTool} 在后续追问中免重发图片续接
+ * （D1 场景 S2）。写入失败只影响追问能力，不影响本轮识别回复（fail-open）。
  */
 @Component
 public class RecognizeImageTool implements Tool {
@@ -57,6 +64,7 @@ public class RecognizeImageTool implements Tool {
 
     private final VisionPort visionPort;
     private final ObjectProvider<PetProfileService> petProfileProvider;
+    private final RecentImageStore recentImageStore;
     private final JsonSchema schema;
 
     /**
@@ -64,11 +72,14 @@ public class RecognizeImageTool implements Tool {
      *
      * @param visionPort          视觉端口
      * @param petProfileProvider 宠物档案服务（可选，容器无则跳过档案匹配）
+     * @param recentImageStore   最近识图缓存（W11；为 null 时只跳过缓存写入，识别照常）
      */
     public RecognizeImageTool(VisionPort visionPort,
-                              ObjectProvider<PetProfileService> petProfileProvider) {
+                              ObjectProvider<PetProfileService> petProfileProvider,
+                              RecentImageStore recentImageStore) {
         this.visionPort = visionPort;
         this.petProfileProvider = petProfileProvider;
+        this.recentImageStore = recentImageStore;
         this.schema = JsonSchema.of(PARAMETERS_SCHEMA);
     }
 
@@ -156,12 +167,34 @@ public class RecognizeImageTool implements Tool {
             data.put("confidence", result.confidence());
             data.put("low_confidence", lowConfidence);
             data.put("matched_profile", matchedProfile);
+            cacheForFollowup(context, description, scene, result.confidence());
             String message = "识别结果：" + description
                     + (matchedProfile != null ? "（已为你匹配到档案：" + matchedProfile + "）" : "");
             return ToolResult.success(data, elapsed(start)).withMessage(message);
         } catch (VisionPortException e) {
             log.warn("图片识别失败: {}", e.getMessage());
             return ToolResult.failure("VISION_FAILED", "图片识别失败，请稍后重试", false);
+        }
+    }
+
+    /**
+     * 识别成功后写识图缓存（W11）：覆盖写 = 换图即换缓存；失败仅 WARN（追问能力降级，链路不受影响）。
+     *
+     * @param context     执行上下文（取 openid）
+     * @param description 识别描述（与回注模型口径一致）
+     * @param scene       识别场景
+     * @param confidence  置信度
+     */
+    private void cacheForFollowup(ToolContext context, String description, String scene, double confidence) {
+        String openid = context == null ? null : context.openid();
+        if (recentImageStore == null || openid == null || openid.isBlank() || description == null) {
+            return;
+        }
+        boolean saved = recentImageStore.save(openid,
+                new RecentImage(description, scene, confidence, Instant.now()));
+        if (!saved) {
+            log.warn("识图缓存写入未成功（追问工具本轮将不可见）openid 脱敏={}",
+                    com.lumensteward.clawbot.common.util.MaskUtils.openid(openid));
         }
     }
 
@@ -173,7 +206,8 @@ public class RecognizeImageTool implements Tool {
      * @return 命中的档案昵称；未命中返回 null
      */
     private String matchProfile(String openid, String description) {
-        if (openid == null || description == null || petProfileProvider.getIfAvailable() == null) {
+        if (openid == null || description == null || petProfileProvider == null
+                || petProfileProvider.getIfAvailable() == null) {
             return null;
         }
         PetProfileService service = petProfileProvider.getIfAvailable();

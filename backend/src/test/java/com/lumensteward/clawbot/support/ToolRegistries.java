@@ -1,6 +1,7 @@
 package com.lumensteward.clawbot.support;
 
 import com.lumensteward.clawbot.domain.tool.ToolRegistry;
+import com.lumensteward.clawbot.domain.tool.impl.AskImageFollowupTool;
 import com.lumensteward.clawbot.domain.tool.impl.ManagePetProfileTool;
 import com.lumensteward.clawbot.domain.tool.impl.PlanRouteTool;
 import com.lumensteward.clawbot.domain.tool.impl.QueryExpressTool;
@@ -29,7 +30,8 @@ public final class ToolRegistries {
     /**
      * 生产工具全集的离线注册表。
      *
-     * @return 含六个已注册工具的 {@link ToolRegistry}
+     * @return 含七个已注册工具的 {@link ToolRegistry}（ask_image 为 W11 追问工具，
+     *         存储依赖传 null ⇒ 恒不可见，不影响元信息反查）
      */
     public static ToolRegistry productionTools() {
         return new ToolRegistry(List.of(
@@ -37,7 +39,8 @@ public final class ToolRegistries {
                 new QueryExpressTool(null),
                 new PlanRouteTool(null),
                 new SynthesizeVoiceTool(null, null, null),
-                new RecognizeImageTool(null, null),
+                new RecognizeImageTool(null, null, null),
+                new AskImageFollowupTool(null),
                 new QueryWeatherTool()));
     }
 }

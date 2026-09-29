@@ -13,7 +13,8 @@ package com.lumensteward.clawbot.domain.tool;
  *
  * @param openid            当前用户（用于按用户裁剪；可为 null，如脱离会话的干跑）
  * @param imageCachePresent 本用户当前是否存在可追问的识图缓存（W11 识图续接的出现判据；
- *                          W10 阶段编排器恒填 {@code false}，即以它为出现条件的工具本轮不可见）
+ *                          编排器每轮按 {@code RecentImageStore.find(openid)} 实时填充，
+ *                          存储不可用按 false，即追问工具本轮不可见）
  */
 public record ToolVisibilityContext(String openid, boolean imageCachePresent) {
 

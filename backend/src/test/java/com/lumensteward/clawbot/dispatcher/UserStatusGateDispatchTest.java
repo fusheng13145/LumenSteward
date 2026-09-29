@@ -66,7 +66,7 @@ class UserStatusGateDispatchTest {
     }
 
     private static InternalMessage message(String openid) {
-        return new InternalMessage(openid, "text", "msg-1", "帮我查快递", null, null, null,
+        return new InternalMessage(openid, "text", "msg-1", "帮我查快递", null, null, null, null,
                 System.currentTimeMillis() / 1000, Map.of());
     }
 }

@@ -70,7 +70,7 @@ class OrchestratorMemoryWiringTest {
                 mock(ContextStore.class), new ContextTrimmer(new HeuristicTokenEstimator()),
                 passChecker, passSafety, new DefaultFallbackService(),
                 mock(ToolCallLogService.class), orchestration, llmProperties,
-                null, null, null, publisher, null, null, recallService);
+                null, null, null, publisher, null, null, recallService, null);
     }
 
     private List<ChatMessage> firstRequestMessages() {

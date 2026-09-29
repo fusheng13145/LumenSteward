@@ -72,7 +72,7 @@ class AsyncReceiptContractVerificationTest {
         FallbackService fallback = mock(FallbackService.class);
 
         InternalMessage inbound = new InternalMessage(OPENID, "text",
-                "msg-async-1", "帮我登记宠物", null, null, null, 0L, Map.of());
+                "msg-async-1", "帮我登记宠物", null, null, null, null, 0L, Map.of());
         when(parser.parse(any(), any())).thenReturn(inbound);
         when(dedup.markIfAbsent(any())).thenReturn(true);
         when(rateLimit.tryAcquire(any(), any())).thenReturn(RateLimitDecision.ALLOWED);

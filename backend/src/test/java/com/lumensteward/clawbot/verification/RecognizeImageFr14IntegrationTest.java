@@ -44,7 +44,7 @@ class RecognizeImageFr14IntegrationTest {
                         null, null, "粘人", null, null, null, null)));
         ObjectProvider<PetProfileService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(profile);
-        RecognizeImageTool tool = new RecognizeImageTool(vision, provider);
+        RecognizeImageTool tool = new RecognizeImageTool(vision, provider, null);
 
         ToolResult result = tool.execute(CTX, args("pet", "http://example.com/corgi.jpg"));
 
@@ -66,7 +66,7 @@ class RecognizeImageFr14IntegrationTest {
                         null, null, null, null, null, null, null)));
         ObjectProvider<PetProfileService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(profile);
-        RecognizeImageTool tool = new RecognizeImageTool(vision, provider);
+        RecognizeImageTool tool = new RecognizeImageTool(vision, provider, null);
 
         ToolResult result = tool.execute(CTX, args("pet", "http://example.com/pet.jpg"));
 
@@ -84,7 +84,7 @@ class RecognizeImageFr14IntegrationTest {
                         null, null, null, null, null, null, null)));
         ObjectProvider<PetProfileService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(profile);
-        RecognizeImageTool tool = new RecognizeImageTool(vision, provider);
+        RecognizeImageTool tool = new RecognizeImageTool(vision, provider, null);
 
         ToolResult result = tool.execute(CTX, args("pet", "http://example.com/cat.jpg"));
 
@@ -102,7 +102,7 @@ class RecognizeImageFr14IntegrationTest {
         when(profile.listLive(ArgumentMatchers.any())).thenReturn(List.of());
         ObjectProvider<PetProfileService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(profile);
-        RecognizeImageTool tool = new RecognizeImageTool(vision, provider);
+        RecognizeImageTool tool = new RecognizeImageTool(vision, provider, null);
 
         ToolResult result = tool.execute(CTX, args("object", "http://example.com/blur.jpg"));
 
@@ -118,7 +118,7 @@ class RecognizeImageFr14IntegrationTest {
         when(profile.listLive(ArgumentMatchers.any())).thenReturn(List.of());
         ObjectProvider<PetProfileService> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(profile);
-        RecognizeImageTool tool = new RecognizeImageTool(vision, provider);
+        RecognizeImageTool tool = new RecognizeImageTool(vision, provider, null);
 
         ToolResult result = tool.execute(CTX, args("pet", null));
 

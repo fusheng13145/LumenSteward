@@ -176,8 +176,12 @@ class ToolRegistryTest {
                 .extracting(node -> node.path("function").path("name").asText())
                 .doesNotContain(QueryWeatherTool.NAME)
                 .contains(QueryExpressTool.NAME);
+        // 无禁用时全部「可见」工具都在；ask_image 因夹具传 null 存储而恒不可见（ToolRegistries 注释），
+        // 恰好顺带证明 W10 裁剪在离线注册表上同样生效
         assertThat(registry.dispatchableSchemas(null, ToolVisibilityContext.of(null)))
-                .hasSize(registry.size());
+                .hasSize(registry.size() - 1)
+                .extracting(node -> node.path("function").path("name").asText())
+                .doesNotContain("ask_image");
     }
 
     @Test
