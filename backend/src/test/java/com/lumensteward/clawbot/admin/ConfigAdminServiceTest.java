@@ -224,6 +224,30 @@ class ConfigAdminServiceTest {
     }
 
     @Test
+    @DisplayName("§7.15 遗留闭合：llm.timeout-seconds 置 0/负数拒绝（超时=0 每调必超时），正数放行")
+    void shouldRejectNonPositiveLlmTimeout() {
+        when(mapper.selectOne(any())).thenReturn(entity("llm.timeout-seconds", "15", "INT"));
+
+        assertThatThrownBy(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("llm.timeout-seconds", "0")),
+                "误配", 1L, "127.0.0.1"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("限流/配额阈值必须为正整数");
+
+        assertThatThrownBy(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("llm.timeout-seconds", "-3")),
+                "误配", 1L, "127.0.0.1"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("限流/配额阈值必须为正整数");
+
+        verify(mapper, never()).updateById(any(SysConfigEntity.class));
+
+        service.update(List.of(new ConfigAdminService.ConfigItem("llm.timeout-seconds", "30")),
+                "放宽超时", 1L, "127.0.0.1");
+        verify(cache).invalidate("llm.timeout-seconds");
+    }
+
+    @Test
     @DisplayName("FR-20 / B-4：配额阈值调正数放行且免重启生效（热生效路径）")
     void shouldAcceptPositiveQuotaThreshold() {
         when(mapper.selectOne(any())).thenReturn(entity("rate_limit.daily_token_budget", "200000", "INT"));

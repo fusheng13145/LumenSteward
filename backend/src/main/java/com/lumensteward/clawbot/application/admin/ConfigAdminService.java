@@ -71,6 +71,9 @@ public class ConfigAdminService {
     /** 限流/成本配额配置键前缀（FR-20 / B-4：整数阈值须为正，见 {@link #requirePositiveQuotaInt}）。 */
     private static final String RATE_LIMIT_KEY_PREFIX = "rate_limit.";
 
+    /** LLM 调用超时（秒）——正整数校验：置 0/负数等于每次调用即超时，属不可用配置（§7.15 遗留闭合）。 */
+    private static final String LLM_TIMEOUT_KEY = ConfigKeys.LLM_TIMEOUT_SECONDS;
+
     private final SysConfigMapper sysConfigMapper;
     private final AuditLogService auditLogService;
     private final ConfigCacheService configCacheService;
@@ -194,7 +197,8 @@ public class ConfigAdminService {
         if (entity.getConfigKey().startsWith(GRAY_KEY_PREFIX) && entity.getConfigKey().endsWith(PERCENT_KEY_SUFFIX)) {
             requireGrayPercent(entity, value);
         }
-        if (entity.getConfigKey().startsWith(RATE_LIMIT_KEY_PREFIX)) {
+        if (entity.getConfigKey().startsWith(RATE_LIMIT_KEY_PREFIX)
+                || LLM_TIMEOUT_KEY.equals(entity.getConfigKey())) {
             requirePositiveQuotaInt(entity, value, type);
         }
     }

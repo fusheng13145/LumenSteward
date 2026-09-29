@@ -2,6 +2,7 @@ package com.lumensteward.clawbot.application.orchestrator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.lumensteward.clawbot.application.anomaly.AnomalyNotice;
+import com.lumensteward.clawbot.application.capability.CapabilitySections;
 import com.lumensteward.clawbot.application.config.ConfigKeys;
 import com.lumensteward.clawbot.application.config.DynamicConfigService;
 import com.lumensteward.clawbot.application.context.ContextTrimmer;
@@ -261,6 +262,18 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             return new OrchestrationResult(text, SessionState.IDLE, List.of(),
                     FallbackReason.INVALID_ARGS.name(), 0, 0);
         }
+        // W10/W11：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」。
+        // imageCachePresent = 该用户当前是否有可追问的识图缓存（W11；存储不可用按无缓存，fail-open）。
+        // 提前到消息构造之前：系统提示词的能力段（W12 真值化）与「帮助」指令依赖同一口径
+        Set<String> disabled = disabledTools();
+        boolean imageCached = recentImageStore != null
+                && recentImageStore.find(request.openid()).isPresent();
+        ToolVisibilityContext visibility = new ToolVisibilityContext(request.openid(), imageCached);
+
+        // W12/W20：「帮助」指令——确定性返回能力自述（与本轮实际下发集一致），不调 LLM、不计预算
+        if (isHelpCommand(request.userMessage())) {
+            return helpResult(request, disabled, visibility);
+        }
         // 成本预算耗尽降级（FR-20 ③）：不再调用 LLM，直接返回基础回复
         if (costBudgetService != null && costBudgetService.isDegraded()) {
             String text = "今天的使用额度已用完啦，明天零点会重新开放，先和你道个晚安～";
@@ -346,7 +359,10 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                 dynamicInt(ConfigKeys.LLM_RESERVED_OUTPUT_TOKENS, llmProperties.reservedOutputTokens()));
 
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(ChatMessage.system(SYSTEM_PROMPT));
+        // W12 能力清单真值化：能力段由「本轮实际可下发集」生成，不再静态断言（避免提示词
+        // 声称已被灰度关闭/按上下文隐藏的工具，反成幻觉源）
+        messages.add(ChatMessage.system(SYSTEM_PROMPT + "\n\n"
+                + CapabilitySections.forPrompt(toolRegistry, disabled, visibility)));
         // W6 / §2.19：注入该用户的跨会话长期记忆（fail-open，读不到即本轮无背景知识）
         String memoryBlock = memoryRecallService == null ? null : memoryRecallService.buildRecallBlock(openid);
         if (memoryBlock != null) {
@@ -359,11 +375,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         }
         messages.add(ChatMessage.user(userMessage));
 
-        // W10/W11：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」。
-        // imageCachePresent = 该用户当前是否有可追问的识图缓存（W11；存储不可用按无缓存，fail-open）
-        Set<String> disabled = disabledTools();
-        boolean imageCached = recentImageStore != null && recentImageStore.find(openid).isPresent();
-        ToolVisibilityContext visibility = new ToolVisibilityContext(openid, imageCached);
+        // 下发集由入口处的 (disabled, visibility) 统一口径裁剪（W10/W11）
         List<JsonNode> tools = toolRegistry.dispatchableSchemas(disabled, visibility);
 
         ChatResult response = null;
@@ -849,13 +861,52 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         return dynamicConfig == null ? fallback : dynamicConfig.getString(key, fallback);
     }
 
+    /** 「帮助」指令词表（W12/W20：精确匹配，避免误伤含这些词的正常对话）。 */
+    private static final Set<String> HELP_COMMANDS =
+            Set.of("帮助", "菜单", "help", "你能做什么", "你会什么", "你能干什么");
+
+    /**
+     * 判定是否「帮助」指令（W12/W20）。
+     *
+     * @param message 用户消息
+     * @return true 表示按帮助指令处理（确定性能力自述，不进对话引擎）
+     */
+    private static boolean isHelpCommand(String message) {
+        if (message == null) {
+            return false;
+        }
+        return HELP_COMMANDS.contains(message.trim().toLowerCase());
+    }
+
+    /**
+     * 「帮助」指令的确定性回复（W12 能力清单真值化）：能力清单由本轮实际可下发集生成，
+     * 与模型看到的函数 Schema 恒一致；不调 LLM、不计预算、不产生工具调用。
+     *
+     * @param request    编排请求
+     * @param disabled   本链路禁用集合
+     * @param visibility 本链路可见性上下文
+     * @return 能力自述结果（rounds=0 / llmCalls=0）
+     */
+    private OrchestrationResult helpResult(OrchestrationRequest request, Set<String> disabled,
+                                           ToolVisibilityContext visibility) {
+        String help = "我是衔光管家，以下是我当前实际能帮你做的事：\n"
+                + CapabilitySections.forUser(toolRegistry, disabled, visibility)
+                + "\n直接用一句话告诉我就行。";
+        String openid = request.openid();
+        if (contextStore != null && openid != null && !openid.isBlank()) {
+            contextStore.appendAll(openid, List.of(
+                    ChatMessage.user(request.userMessage()), ChatMessage.assistant(help)));
+        }
+        log.info("帮助指令返回能力自述 openid={} rounds=0 llmCalls=0", MaskUtils.openid(openid));
+        return new OrchestrationResult(help, SessionState.IDLE, List.of(), null, 0, 0);
+    }
+
     /**
      * 运行时工具开关（FR-18）：配置值为 JSON 数组或逗号分隔，空则回退静态禁用集合。
      *
      * @return 被禁用工具名集合
      */
-    private Set<String> disabledTools() {
-        Set<String> staticDisabled = orchestrationProperties.disabledTools() == null
+    private Set<String> disabledTools() {        Set<String> staticDisabled = orchestrationProperties.disabledTools() == null
                 ? Set.of() : orchestrationProperties.disabledTools();
         if (dynamicConfig == null) {
             return staticDisabled;

@@ -107,6 +107,11 @@ public final class ConfigKeys {
     /** 熔断 P95 时延阈值（ms，0 表示不启用时延判据）。 */
     public static final String GRAY_BREAKER_P95_MS = "gray.breaker.p95-ms";
 
+    // ===== 首发体验（W20 / 迭代 4）=====
+
+    /** 关注欢迎语正文（能力自述段由实际下发集生成，不在此配置）。 */
+    public static final String WECHAT_WELCOME_MESSAGE = "wechat.welcome-message";
+
     private ConfigKeys() {
     }
 }

@@ -121,8 +121,11 @@ public class SynthesizeVoiceTool implements Tool {
             return ToolResult.failure("INVALID_ARGS", "文本超过 " + MAX_TEXT_LEN + " 字上限", false);
         }
         String voiceId = text(args, "voice_id");
+        // W12：合成前清洗括号旁注/语气词（母本 M-2 教训：旁注被一字不落读出）；
+        // 文字回退路径仍用原文，保证降级信息不丢
+        String speakText = VoiceTextCleaner.clean(text);
         try {
-            byte[] audio = voiceSynthesisPort.synthesize(text, voiceId);
+            byte[] audio = voiceSynthesisPort.synthesize(speakText, voiceId);
             if (audio == null || audio.length == 0) {
                 // TTS 失败：回退文字，不损坏音频、不抛异常（FR-11 验收③）
                 return ToolResult.failure("TTS_FAILED", "语音暂时无法生成，以下是文字：" + text, false);
