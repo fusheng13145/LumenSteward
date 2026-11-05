@@ -32,6 +32,7 @@ import com.lumensteward.clawbot.common.util.JsonUtils;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.context.ContextStore;
 import com.lumensteward.clawbot.domain.context.RecentImageStore;
+import com.lumensteward.clawbot.domain.game.GameStore;
 import com.lumensteward.clawbot.domain.model.TaskContext;
 import com.lumensteward.clawbot.domain.tool.JsonSchema;
 import com.lumensteward.clawbot.domain.tool.Tool;
@@ -115,6 +116,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
     private final MemoryRecallService memoryRecallService;
     /** 最近识图缓存（W11 / §7.17；可为 null，此时 ask_image 恒不可见）。 */
     private final RecentImageStore recentImageStore;
+    /** 桌游会话存储（W19 / §7.19；可为 null，此时桌游工具全部不可见）。 */
+    private final GameStore gameStore;
 
     /** 工具执行超时隔离线程池（daemon，避免阻塞 JVM 退出）。 */
     private final ExecutorService toolExecutor = Executors.newCachedThreadPool(r -> {
@@ -147,6 +150,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      * @param taskSessionService    任务型多步会话服务（FR-24 / T8；可为 null）
      * @param memoryRecallService   个人状态库召回服务（W6 / §2.19；可为 null，此时不注入长期记忆）
      * @param recentImageStore      最近识图缓存（W11 / §7.17；可为 null，此时 ask_image 恒不可见）
+     * @param gameStore             桌游会话存储（W19 / §7.19；可为 null，此时桌游工具全部不可见）
      */
     @Autowired
     public AgentOrchestratorImpl(LlmClient llmClient, ToolRegistry toolRegistry,
@@ -164,7 +168,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
                                  AuditLogService auditLogService,
                                  TaskSessionService taskSessionService,
                                  MemoryRecallService memoryRecallService,
-                                 RecentImageStore recentImageStore) {
+                                 RecentImageStore recentImageStore,
+                                 GameStore gameStore) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.contextStore = contextStore;
@@ -183,6 +188,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this.taskSessionService = taskSessionService;
         this.memoryRecallService = memoryRecallService;
         this.recentImageStore = recentImageStore;
+        this.gameStore = gameStore;
     }
 
     /**
@@ -220,7 +226,7 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         this(llmClient, toolRegistry, contextStore, contextTrimmer, consistencyChecker,
                 contentSafetyService, fallbackService, toolCallLogService,
                 orchestrationProperties, llmProperties, dynamicConfig, costBudgetService,
-                messageLengthGuard, eventPublisher, auditLogService, null, null, null);
+                messageLengthGuard, eventPublisher, auditLogService, null, null, null, null);
     }
 
     /**
@@ -262,13 +268,16 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             return new OrchestrationResult(text, SessionState.IDLE, List.of(),
                     FallbackReason.INVALID_ARGS.name(), 0, 0);
         }
-        // W10/W11：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」。
+        // W10/W11/W19：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」。
         // imageCachePresent = 该用户当前是否有可追问的识图缓存（W11；存储不可用按无缓存，fail-open）。
+        // activeGame = 该用户当前进行中桌游的工具名（W19；存储不可用按无局，fail-open）。
         // 提前到消息构造之前：系统提示词的能力段（W12 真值化）与「帮助」指令依赖同一口径
         Set<String> disabled = disabledTools();
         boolean imageCached = recentImageStore != null
                 && recentImageStore.find(request.openid()).isPresent();
-        ToolVisibilityContext visibility = new ToolVisibilityContext(request.openid(), imageCached);
+        String activeGame = gameStore == null ? null
+                : gameStore.find(request.openid()).map(session -> session.game().toolName()).orElse(null);
+        ToolVisibilityContext visibility = new ToolVisibilityContext(request.openid(), imageCached, activeGame);
 
         // W12/W20：「帮助」指令——确定性返回能力自述（与本轮实际下发集一致），不调 LLM、不计预算
         if (isHelpCommand(request.userMessage())) {

@@ -105,6 +105,218 @@ rules:
       completion: 60
     content: "（Mock）从图片看，这只橘猫大约 2 岁（基于刚才识别的缓存信息）。"
 
+  # ---- W19 单人桌游：大厅开局 + 三类对局的回合流程（见手册 §7.19） ----
+  # game_lobby 恒可见（开局/关局/列表）；turtle_soup / code_break / life_sim 仅在
+  # 对局进行中出现在函数 Schema（W10 会话门控）。
+  # 轮次口径（W19 实测澄清）：round 的推定基于「编排器本轮消息序列」，而工具调用的
+  # assistant 消息不跨用户回合持久化进上下文 ⇒ 每个新用户回合都从 round 0 重新开始
+  # （同一 W11 的 ask-image-toolcall 也是 round 0 规则却在第二回合适中）。故每条指令词
+  # 配两条规则：round 0 发起工具调用、round 1（工具结果回来后）给出终态回复；
+  # 9 组 match 词互不重叠，且必须排在 pet-after-tool（round 1 无 match 兜底）之前。
+  # 刻意避开「已查询/已记录/已生成」等完成态动词（BR-04 动作声明词表），防止 Mock
+  # 文案被一致性校验误判为执行性幻觉。
+
+  # 海龟汤（openid_w19_soup：开局 → 提示 → 猜中）
+  - name: w19-lobby-soup
+    round: 0
+    match: "海龟汤"
+    finishReason: tool_calls
+    usage:
+      prompt: 660
+      completion: 40
+    toolCalls:
+      - id: mock-call-lobby-soup
+        type: function
+        name: game_lobby
+        arguments: '{"action":"start","game":"turtle_soup"}'
+
+  - name: w19-soup-intro
+    round: 1
+    match: "海龟汤"
+    finishReason: stop
+    usage:
+      prompt: 880
+      completion: 70
+    content: "（Mock）海龟汤开局！汤面在工具结果里，请先把它讲给玩家，引导他用是非问题逼近真相；汤底是你我的秘密，猜不中别说出来。"
+
+  - name: w19-soup-hint
+    round: 0
+    match: "给个提示"
+    finishReason: tool_calls
+    usage:
+      prompt: 700
+      completion: 35
+    toolCalls:
+      - id: mock-call-soup-hint
+        type: function
+        name: turtle_soup
+        arguments: '{"action":"hint"}'
+
+  - name: w19-soup-hint-reply
+    round: 1
+    match: "给个提示"
+    finishReason: stop
+    usage:
+      prompt: 860
+      completion: 60
+    content: "（Mock）提示来了，就藏在工具结果里，原样讲给玩家并继续引导提问。"
+
+  - name: w19-soup-solve
+    round: 0
+    match: "是打嗝吗"
+    finishReason: tool_calls
+    usage:
+      prompt: 700
+      completion: 35
+    toolCalls:
+      - id: mock-call-soup-solve
+        type: function
+        name: turtle_soup
+        arguments: '{"action":"solve"}'
+
+  - name: w19-soup-solved
+    round: 1
+    match: "是打嗝吗"
+    finishReason: stop
+    usage:
+      prompt: 860
+      completion: 70
+    content: "（Mock）恭喜猜中！汤底与复盘都在工具结果里，请向玩家揭晓并致贺。"
+
+  # 密码破译（openid_w19_code：开局 → 猜测 → 放弃揭底）
+  - name: w19-lobby-code
+    round: 0
+    match: "密码破译"
+    finishReason: tool_calls
+    usage:
+      prompt: 660
+      completion: 40
+    toolCalls:
+      - id: mock-call-lobby-code
+        type: function
+        name: game_lobby
+        arguments: '{"action":"start","game":"code_break"}'
+
+  - name: w19-code-intro
+    round: 1
+    match: "密码破译"
+    finishReason: stop
+    usage:
+      prompt: 880
+      completion: 60
+    content: "（Mock）密码破译开局！密文由系统保管，请让玩家直接报 4 位互不重复的数字，你原样转述给 code_break，再把 nA mB 反馈翻译给他。"
+
+  - name: w19-code-guess
+    round: 0
+    match: "我猜 0123"
+    finishReason: tool_calls
+    usage:
+      prompt: 700
+      completion: 35
+    toolCalls:
+      - id: mock-call-code-guess
+        type: function
+        name: code_break
+        arguments: '{"action":"guess","guess":"0123"}'
+
+  - name: w19-code-feedback
+    round: 1
+    match: "我猜 0123"
+    finishReason: stop
+    usage:
+      prompt: 860
+      completion: 55
+    content: "（Mock）反馈见工具结果（nA mB 与剩余机会），请向玩家播报并鼓励继续推理。"
+
+  - name: w19-code-giveup
+    round: 0
+    match: "公布答案"
+    finishReason: tool_calls
+    usage:
+      prompt: 700
+      completion: 30
+    toolCalls:
+      - id: mock-call-code-giveup
+        type: function
+        name: code_break
+        arguments: '{"action":"giveup"}'
+
+  - name: w19-code-reveal
+    round: 1
+    match: "公布答案"
+    finishReason: stop
+    usage:
+      prompt: 860
+      completion: 60
+    content: "（Mock）答案已在工具结果里，请向玩家揭晓并复盘。"
+
+  # 模拟人生（openid_w19_life：开局 → 过一年 → 查状态）
+  - name: w19-lobby-life
+    round: 0
+    match: "模拟人生"
+    finishReason: tool_calls
+    usage:
+      prompt: 660
+      completion: 40
+    toolCalls:
+      - id: mock-call-lobby-life
+        type: function
+        name: game_lobby
+        arguments: '{"action":"start","game":"life_sim"}'
+
+  - name: w19-life-intro
+    round: 1
+    match: "模拟人生"
+    finishReason: stop
+    usage:
+      prompt: 880
+      completion: 60
+    content: "（Mock）模拟人生开局！18 岁的角色卡在工具结果里，请讲一段开场白，问他今年想做什么。"
+
+  - name: w19-life-live
+    round: 0
+    match: "认真工作"
+    finishReason: tool_calls
+    usage:
+      prompt: 700
+      completion: 35
+    toolCalls:
+      - id: mock-call-life-live
+        type: function
+        name: life_sim
+        arguments: '{"action":"live","choice":"认真工作"}'
+
+  - name: w19-life-narrate
+    round: 1
+    match: "认真工作"
+    finishReason: stop
+    usage:
+      prompt: 860
+      completion: 60
+    content: "（Mock）这一年的人生结算在工具结果里，请讲成故事并问下一年想去哪。"
+
+  - name: w19-life-status
+    round: 0
+    match: "看看我的状态"
+    finishReason: tool_calls
+    usage:
+      prompt: 700
+      completion: 30
+    toolCalls:
+      - id: mock-call-life-status
+        type: function
+        name: life_sim
+        arguments: '{"action":"status"}'
+
+  - name: w19-life-status-reply
+    round: 1
+    match: "看看我的状态"
+    finishReason: stop
+    usage:
+      prompt: 860
+      completion: 55
+    content: "（Mock）角色当前状态在工具结果里，请向玩家汇报并问下一年打算。"
+
   # ---- 宠物档案：本轮发起工具调用（第 0 轮） ----
   - name: pet-create-toolcall
     round: 0

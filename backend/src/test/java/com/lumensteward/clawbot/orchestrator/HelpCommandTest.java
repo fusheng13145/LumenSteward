@@ -117,7 +117,7 @@ class HelpCommandTest {
         return new AgentOrchestratorImpl(llm, registry, store,
                 new ContextTrimmer(new HeuristicTokenEstimator()), PASS_CHECKER, PASS_SAFETY,
                 new DefaultFallbackService(), logService, orchestration, llmProperties,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
     }
 
     private static OrchestrationRequest request(String message) {

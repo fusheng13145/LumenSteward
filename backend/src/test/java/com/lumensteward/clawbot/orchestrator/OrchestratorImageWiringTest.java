@@ -109,7 +109,7 @@ class OrchestratorImageWiringTest {
         return new AgentOrchestratorImpl(llm, registry, new InMemoryContextStore(),
                 new ContextTrimmer(new HeuristicTokenEstimator()), PASS_CHECKER, PASS_SAFETY,
                 new DefaultFallbackService(), new NoOpToolCallLogService(), orchestration, llmProperties,
-                null, null, null, null, null, null, null, recentImageStore);
+                null, null, null, null, null, null, null, recentImageStore, null);
     }
 
     private static RecentImage cachedImage() {
