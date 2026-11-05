@@ -33,7 +33,7 @@ public class WechatMessageParserImpl implements WechatMessageParser {
     public InternalMessage parse(String rawBody, String msgTypeHint) {
         if (rawBody == null || rawBody.isBlank()) {
             return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null, null,
-                    null, null, 0L, Map.of());
+                    null, null, null, 0L, Map.of());
         }
         try {
             DocumentBuilderFactory factory = secureFactory();
@@ -44,7 +44,7 @@ public class WechatMessageParserImpl implements WechatMessageParser {
             Element root = document.getDocumentElement();
             if (root == null) {
                 return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null, null,
-                        null, null, 0L, Map.of());
+                        null, null, null, 0L, Map.of());
             }
             String openid = text(root, "FromUserName");
             String msgType = firstNonBlank(text(root, "MsgType"), msgTypeHint);
@@ -52,6 +52,12 @@ public class WechatMessageParserImpl implements WechatMessageParser {
             String content = text(root, "Content");
             String mediaId = text(root, "MediaId");
             String picUrl = text(root, "PicUrl");
+            // W16：link 消息（Title/Description/Url）——Title 承载进 content（消息的文本载荷），
+            // Url 进 linkUrl；Description 刻意不取（分享者的编辑语，摘要以正文为准）
+            String linkUrl = text(root, "Url");
+            if ("link".equalsIgnoreCase(msgType) && content == null) {
+                content = text(root, "Title");
+            }
             Double latitude = parseDouble(text(root, "Location_X"));
             Double longitude = parseDouble(text(root, "Location_Y"));
             long createTime = parseLong(text(root, "CreateTime"));
@@ -66,12 +72,12 @@ public class WechatMessageParserImpl implements WechatMessageParser {
                 eventAttributes.put("EventKey", eventKey);
             }
             return new InternalMessage(openid, normalizeType(msgType), msgId, content, mediaId, picUrl,
-                    latitude, longitude, createTime, eventAttributes);
+                    linkUrl, latitude, longitude, createTime, eventAttributes);
         } catch (Exception e) {
             // 解析失败不抛出：返回带类型提示的空消息，交由上层走默认/兜底（AC-A6 不 500）
             log.warn("微信报文解析失败，回落为空消息: {}", e.getMessage());
             return new InternalMessage(null, normalizeType(msgTypeHint), null, null, null, null,
-                    null, null, 0L, Map.of());
+                    null, null, null, 0L, Map.of());
         }
     }
 

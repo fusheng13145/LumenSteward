@@ -112,6 +112,25 @@ public final class ConfigKeys {
     /** 关注欢迎语正文（能力自述段由实际下发集生成，不在此配置）。 */
     public static final String WECHAT_WELCOME_MESSAGE = "wechat.welcome-message";
 
+    // ===== 语音音色目录与管家 persona（W13 / 迭代 4）=====
+
+    /** 可用音色白名单（JSON 字符串数组；voice_id 越界运行期拒绝，FR-18 值域口径）。 */
+    public static final String TTS_VOICE_CATALOG = "tts.voice-catalog";
+
+    /** 默认音色（voice_id 空时使用）。 */
+    public static final String TTS_VOICE_DEFAULT = "tts.voice-default";
+
+    /** 管家 persona 段（仅管理员可配；诚实原则尾段固定不在此列，BR-04）。 */
+    public static final String ORCHESTRATION_PERSONA = "orchestration.persona";
+
+    // ===== 长任务通道（W15 / 迭代 4）=====
+
+    /** 长任务执行池线程数（有界，默认 2；调整后重启生效）。 */
+    public static final String LONGTASK_POOL_SIZE = "longtask.pool-size";
+
+    /** 单个长任务执行超时（秒，超时置 FAILED/TIMEOUT）。 */
+    public static final String LONGTASK_TIMEOUT_SECONDS = "longtask.timeout-seconds";
+
     private ConfigKeys() {
     }
 }

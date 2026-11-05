@@ -9,6 +9,7 @@ import com.lumensteward.clawbot.domain.tool.impl.ManagePetProfileTool;
 import com.lumensteward.clawbot.domain.tool.impl.PlanRouteTool;
 import com.lumensteward.clawbot.domain.tool.impl.QueryExpressTool;
 import com.lumensteward.clawbot.domain.tool.impl.QueryWeatherTool;
+import com.lumensteward.clawbot.domain.tool.impl.ReadLinkTool;
 import com.lumensteward.clawbot.domain.tool.impl.RecognizeImageTool;
 import com.lumensteward.clawbot.domain.tool.impl.SynthesizeVoiceTool;
 import com.lumensteward.clawbot.domain.tool.impl.TurtleSoupTool;
@@ -34,9 +35,9 @@ public final class ToolRegistries {
     /**
      * 生产工具全集的离线注册表。
      *
-     * @return 含十一个已注册工具的 {@link ToolRegistry}（ask_image 为 W11 追问工具、
-     *         game_lobby / turtle_soup / code_break / life_sim 为 W19 桌游工具，存储依赖
-     *         传 null ⇒ 不可见，不影响元信息反查与既有包含式断言）
+     * @return 含十二个已注册工具的 {@link ToolRegistry}（ask_image 为 W11 追问工具、
+     *         game_lobby / turtle_soup / code_break / life_sim 为 W19 桌游工具、read_link
+     *         为 W16 链接工具，存储依赖传 null ⇒ 不可见，不影响元信息反查与既有包含式断言）
      */
     public static ToolRegistry productionTools() {
         return new ToolRegistry(List.of(
@@ -50,6 +51,7 @@ public final class ToolRegistries {
                 new GameLobbyTool(null),
                 new TurtleSoupTool(null),
                 new CodeBreakTool(null),
-                new LifeSimTool(null)));
+                new LifeSimTool(null),
+                new ReadLinkTool(null)));
     }
 }

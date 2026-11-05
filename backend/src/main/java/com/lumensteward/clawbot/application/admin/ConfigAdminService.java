@@ -1,6 +1,7 @@
 package com.lumensteward.clawbot.application.admin;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.lumensteward.clawbot.application.config.ConfigKeys;
 import com.lumensteward.clawbot.common.error.ErrorCode;
 import com.lumensteward.clawbot.common.exception.BizException;
@@ -194,12 +195,63 @@ public class ConfigAdminService {
         if (ConfigKeys.ORCHESTRATION_DISABLED_TOOLS.equals(entity.getConfigKey())) {
             validateDisabledTools(value);
         }
+        if (ConfigKeys.TTS_VOICE_CATALOG.equals(entity.getConfigKey())) {
+            validateVoiceCatalog(value);
+        }
+        if (ConfigKeys.TTS_VOICE_DEFAULT.equals(entity.getConfigKey())) {
+            requireShortNonBlank(entity, value, 32);
+        }
+        if (ConfigKeys.ORCHESTRATION_PERSONA.equals(entity.getConfigKey())) {
+            requireShortNonBlank(entity, value, PERSONA_MAX_LENGTH);
+        }
         if (entity.getConfigKey().startsWith(GRAY_KEY_PREFIX) && entity.getConfigKey().endsWith(PERCENT_KEY_SUFFIX)) {
             requireGrayPercent(entity, value);
         }
         if (entity.getConfigKey().startsWith(RATE_LIMIT_KEY_PREFIX)
-                || LLM_TIMEOUT_KEY.equals(entity.getConfigKey())) {
+                || LLM_TIMEOUT_KEY.equals(entity.getConfigKey())
+                || ConfigKeys.LONGTASK_TIMEOUT_SECONDS.equals(entity.getConfigKey())) {
             requirePositiveQuotaInt(entity, value, type);
+        }
+    }
+
+    /** persona 段长度上限（防提示词膨胀挤占上下文预算；诚实原则尾段固定不受此控）。 */
+    static final int PERSONA_MAX_LENGTH = 500;
+
+    /**
+     * 音色目录校验（W13）：必须是 1~32 个非空、各 ≤32 字符的字符串的 JSON 数组。
+     *
+     * <p>为什么不让目录为空：空目录会让一切 voice_id（含默认音色）都被拒绝，等价于
+     * 关闭语音能力——关闭有各自的工具开关，此处宁拒不留。
+     */
+    private static void validateVoiceCatalog(String value) {
+        JsonNode node;
+        try {
+            node = JsonUtils.mapper().readTree(value);
+        } catch (Exception e) {
+            throw BizException.of(ErrorCode.PARAM_INVALID,
+                    "音色目录必须是 JSON 数组: tts.voice-catalog");
+        }
+        if (node == null || !node.isArray() || node.isEmpty() || node.size() > 32) {
+            throw BizException.of(ErrorCode.PARAM_INVALID,
+                    "音色目录须为 1~32 个音色的 JSON 数组: tts.voice-catalog");
+        }
+        for (JsonNode item : node) {
+            if (!item.isTextual() || item.asText().isBlank() || item.asText().length() > 32) {
+                throw BizException.of(ErrorCode.PARAM_INVALID,
+                        "音色目录的每个元素须为 ≤32 字符的非空字符串: tts.voice-catalog");
+            }
+        }
+    }
+
+    /** 非空且限长的字符串校验（W13：默认音色 / persona 段）。 */
+    private static void requireShortNonBlank(SysConfigEntity entity, String value, int maxLength) {
+        if (value == null || value.isBlank()) {
+            throw BizException.of(ErrorCode.PARAM_INVALID,
+                    "配置值不能为空: " + entity.getConfigKey());
+        }
+        if (value.length() > maxLength) {
+            throw BizException.of(ErrorCode.PARAM_INVALID,
+                    "配置值超长（上限 " + maxLength + "）: " + entity.getConfigKey());
         }
     }
 

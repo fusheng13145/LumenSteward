@@ -129,6 +129,6 @@ class EventMessageHandlerTest {
         if (eventKey != null) {
             attrs = Map.of("Event", event, "EventKey", eventKey);
         }
-        return new InternalMessage(openid, "event", "msg-w20", null, null, null, null, null, 0L, attrs);
+        return new InternalMessage(openid, "event", "msg-w20", null, null, null, null, null, null, 0L, attrs);
     }
 }

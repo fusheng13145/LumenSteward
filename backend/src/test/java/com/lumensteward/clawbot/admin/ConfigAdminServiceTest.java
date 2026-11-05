@@ -288,6 +288,51 @@ class ConfigAdminServiceTest {
                 eq("gpt-4o-mini"), eq("mock-model"), eq("恢复默认值"), eq("127.0.0.1"), eq(1));
     }
 
+    @Test
+    @DisplayName("W13 音色目录：合法 JSON 数组放行，非法 JSON / 空数组 / 非字符串元素一律拒绝")
+    void shouldValidateVoiceCatalog() {
+        when(mapper.selectOne(any())).thenReturn(entity("tts.voice-catalog", "[]", "JSON"));
+
+        assertThatCode(() -> service.update(
+                List.of(new ConfigAdminService.ConfigItem("tts.voice-catalog",
+                        "[\"default\",\"gentle\"]")),
+                "调整音色目录", 1L, "127.0.0.1")).doesNotThrowAnyException();
+
+        for (String bad : new String[]{"不是JSON", "[]", "[\"\", \"x\"]", "[1,2]",
+                "[\"" + "字".repeat(33) + "\"]"}) {
+            assertThatThrownBy(() -> service.update(
+                    List.of(new ConfigAdminService.ConfigItem("tts.voice-catalog", bad)),
+                    "非法目录", 1L, "127.0.0.1"))
+                    .as("音色目录非法值应被拒: %s", bad)
+                    .isInstanceOf(BizException.class);
+        }
+    }
+
+    @Test
+    @DisplayName("W13 persona 段：≤500 字放行，超长拒绝；默认音色置空拒绝")
+    void shouldValidatePersonaAndDefaultVoice() {
+        assertThatCode(() -> {
+            when(mapper.selectOne(any()))
+                    .thenReturn(entity("orchestration.persona", "", "STRING"));
+            service.update(List.of(new ConfigAdminService.ConfigItem("orchestration.persona",
+                    "你是温和的家庭管家。")), "调整人设", 1L, "127.0.0.1");
+        }).doesNotThrowAnyException();
+
+        assertThatThrownBy(() -> {
+            when(mapper.selectOne(any()))
+                    .thenReturn(entity("orchestration.persona", "", "STRING"));
+            service.update(List.of(new ConfigAdminService.ConfigItem("orchestration.persona",
+                    "你".repeat(501))), "超长人设", 1L, "127.0.0.1");
+        }).isInstanceOf(BizException.class);
+
+        assertThatThrownBy(() -> {
+            when(mapper.selectOne(any()))
+                    .thenReturn(entity("tts.voice-default", "default", "STRING"));
+            service.update(List.of(new ConfigAdminService.ConfigItem("tts.voice-default", "  ")),
+                    "置空默认音色", 1L, "127.0.0.1");
+        }).isInstanceOf(BizException.class);
+    }
+
     private static SysConfigEntity entity(String key, String value, String type) {
         return entity(key, value, type, 0);
     }

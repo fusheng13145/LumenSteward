@@ -7,7 +7,7 @@ import type { IntentSliceVO } from '@/types/monitor'
 /**
  * 意图分布（FR-17 ④：饼图 / T4）。
  *
- * 口径：按工具调用归因到业务意图域（image_recognition/tts/express/navigation/pet_profile/game/chat）。
+ * 口径：按工具调用归因到业务意图域（image_recognition/tts/express/navigation/pet_profile/game/link/chat）。
  * 数据来自 `/api/monitor/intent-distribution`。
  */
 const props = defineProps<{
@@ -23,6 +23,7 @@ const INTENT_LABELS: Record<string, string> = {
   navigation: '导航',
   pet_profile: '宠物档案',
   game: '桌游',
+  link: '链接阅读',
   chat: '纯对话',
 }
 

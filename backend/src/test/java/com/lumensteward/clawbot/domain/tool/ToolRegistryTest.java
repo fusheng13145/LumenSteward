@@ -176,12 +176,13 @@ class ToolRegistryTest {
                 .extracting(node -> node.path("function").path("name").asText())
                 .doesNotContain(QueryWeatherTool.NAME)
                 .contains(QueryExpressTool.NAME);
-        // 无禁用时全部「可见」工具都在；ask_image（W11）与 4 个桌游工具（W19）因夹具传 null
-        // 存储而不可见（ToolRegistries 注释），恰好顺带证明 W10 裁剪在离线注册表上同样生效
+        // 无禁用时全部「可见」工具都在；ask_image（W11）、4 个桌游工具（W19）与 read_link（W16）
+        // 因夹具传 null 存储而不可见（ToolRegistries 注释），恰好顺带证明 W10 裁剪在离线注册表上同样生效
         assertThat(registry.dispatchableSchemas(null, ToolVisibilityContext.of(null)))
-                .hasSize(registry.size() - 5)
+                .hasSize(registry.size() - 6)
                 .extracting(node -> node.path("function").path("name").asText())
-                .doesNotContain("ask_image", "game_lobby", "turtle_soup", "code_break", "life_sim");
+                .doesNotContain("ask_image", "game_lobby", "turtle_soup", "code_break", "life_sim",
+                        "read_link");
     }
 
     @Test

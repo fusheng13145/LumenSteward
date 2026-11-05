@@ -104,7 +104,9 @@ public class AskImageFollowupTool implements Tool {
 
     @Override
     public boolean visibleIn(ToolVisibilityContext context) {
-        return recentImageStore != null && context != null && context.imageCachePresent();
+        // W16 同轮互斥（P2 预算收口）：本轮含链接时 read_link 优先，本工具让位（次轮恢复）
+        return recentImageStore != null && context != null && context.imageCachePresent()
+                && !context.linkPresent();
     }
 
     @Override

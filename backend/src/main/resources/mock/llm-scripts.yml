@@ -317,6 +317,56 @@ rules:
       completion: 55
     content: "（Mock）角色当前状态在工具结果里，请向玩家汇报并问下一年打算。"
 
+  # ---- W13 语音音色目录：synthesize_voice 运行期样本入口（顺带闭合 W12 清洗样本） ----
+  # 合成文本带括号旁注（要记得带伞哦）——VoiceTextCleaner 应剥除后合成，
+  # log_tool_call.result_json 的 speak_text 可直接核验清洗效果。
+  - name: w13-voice-toolcall
+    round: 0
+    match: "念出来"
+    finishReason: tool_calls
+    usage:
+      prompt: 660
+      completion: 40
+    toolCalls:
+      - id: mock-call-voice-w13
+        type: function
+        name: synthesize_voice
+        arguments: '{"text":"今天天气不错，适合出门散步（要记得带伞哦）","voice_id":"gentle"}'
+
+  - name: w13-voice-after-tool
+    round: 1
+    match: "念出来"
+    finishReason: stop
+    usage:
+      prompt: 880
+      completion: 50
+    content: "（Mock）语音已经发到你微信上了，注意查收～"
+
+  # ---- W16 链接读取：link 消息与文本内嵌 URL → read_link（本轮含链接时可见） ----
+  # 取证脚本固定发送同一 URL，故 toolcall 的 arguments 为静态串即可命中；
+  # 真实 provider 下模型从消息中取 URL 传参。
+  - name: w16-link-toolcall
+    round: 0
+    match: "（用户分享了一个链接"
+    finishReason: tool_calls
+    usage:
+      prompt: 700
+      completion: 40
+    toolCalls:
+      - id: mock-call-read-link
+        type: function
+        name: read_link
+        arguments: '{"url":"https://example.com/hello"}'
+
+  - name: w16-link-summary
+    round: 1
+    match: "（用户分享了一个链接"
+    finishReason: stop
+    usage:
+      prompt: 880
+      completion: 60
+    content: "（Mock）链接正文在工具结果里（标题与 content 字段），请据此总结要点；正文若被截断要如实说明。"
+
   # ---- 宠物档案：本轮发起工具调用（第 0 轮） ----
   - name: pet-create-toolcall
     round: 0

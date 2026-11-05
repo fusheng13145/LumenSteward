@@ -9,19 +9,20 @@ import java.util.Map;
  * {@code ToUserName}）——平台报文差异仅在解析层消化，业务层只面对本模型。
  *
  * @param openid          用户标识（脱敏后日志输出）
- * @param msgType         消息类型（text/image/voice/location/event，已归一为线值）
+ * @param msgType         消息类型（text/image/voice/location/link/event，已归一为线值）
  * @param msgId           平台消息 id（幂等去重键）
- * @param content         文本内容（仅 text）
+ * @param content         文本内容（text 正文；link 消息承载标题）
  * @param mediaId         素材标识（image/voice）
  * @param picUrl          图片临时链接（image，W11 识图续接用；平台侧有时效，须尽快消费）
+ * @param linkUrl         链接地址（link，W16 链接读取用）
  * @param latitude        纬度（location）
  * @param longitude       经度（location）
  * @param createTime      平台时间戳（秒）
  * @param eventAttributes 事件属性（event：subscribe/unsubscribe/CLICK 等）
  */
 public record InternalMessage(String openid, String msgType, String msgId, String content,
-                              String mediaId, String picUrl, Double latitude, Double longitude,
-                              long createTime, Map<String, String> eventAttributes) {
+                              String mediaId, String picUrl, String linkUrl, Double latitude,
+                              Double longitude, long createTime, Map<String, String> eventAttributes) {
 
     public InternalMessage {
         eventAttributes = eventAttributes == null ? Map.of() : Map.copyOf(eventAttributes);

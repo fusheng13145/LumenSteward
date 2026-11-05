@@ -6,6 +6,7 @@ import com.lumensteward.clawbot.common.api.PageResult;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.model.PetProfileView;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.AuditLogEntity;
+import com.lumensteward.clawbot.domain.task.LongTaskRecord;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.MemoryItemEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.SysConfigEntity;
 import com.lumensteward.clawbot.infrastructure.persistence.entity.ToolCallLogEntity;
@@ -15,6 +16,7 @@ import com.lumensteward.clawbot.infrastructure.persistence.entity.WxUserEntity;
 import com.lumensteward.clawbot.interfaces.dto.audit.AuditLogVO;
 import com.lumensteward.clawbot.interfaces.dto.config.ConfigVO;
 import com.lumensteward.clawbot.interfaces.dto.gray.GrayPreviewVO;
+import com.lumensteward.clawbot.interfaces.dto.task.LongTaskVO;
 import com.lumensteward.clawbot.interfaces.dto.memory.MemoryItemVO;
 import com.lumensteward.clawbot.interfaces.dto.pet.PetVO;
 import com.lumensteward.clawbot.interfaces.dto.session.MessageVO;
@@ -168,6 +170,21 @@ public class MaskingAssembler {
         return new PetVO(view.id(), MaskUtils.openid(view.openid()), view.petName(), view.petType(),
                 view.breed(), view.gender(), view.birthday(), view.weightKg(), view.personality(),
                 view.notes(), view.createdAt(), view.updatedAt());
+    }
+
+    /**
+     * 长任务 → 视图（W15）：原始 openid 只以脱敏形态出参（BR-21）。
+     *
+     * @param task 任务领域快照
+     * @return 视图
+     */
+    public LongTaskVO toLongTaskVO(LongTaskRecord task) {
+        if (task == null) {
+            return null;
+        }
+        return new LongTaskVO(task.id(), task.taskType(), MaskUtils.openid(task.openid()),
+                task.status() == null ? null : task.status().name(), task.resultJson(),
+                task.errorType(), task.attempts(), task.delivered(), task.traceId());
     }
 
     /**

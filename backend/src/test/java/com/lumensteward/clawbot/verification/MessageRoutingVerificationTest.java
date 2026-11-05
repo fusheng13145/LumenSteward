@@ -47,7 +47,7 @@ class MessageRoutingVerificationTest {
 
     private static InternalMessage msg(String type) {
         return new InternalMessage("openid-routing-1234567890", type, "m1", "hi", null, null,
-                null, null, 0L, Map.of());
+                null, null, null, 0L, Map.of());
     }
 
     @Test

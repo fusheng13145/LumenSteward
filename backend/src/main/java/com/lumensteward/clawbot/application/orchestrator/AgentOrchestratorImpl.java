@@ -89,9 +89,11 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
 
     private static final Logger log = LoggerFactory.getLogger(AgentOrchestratorImpl.class);
 
-    /** 系统提示词骨架（附录 C 的最小落地）。 */
-    private static final String SYSTEM_PROMPT = """
-            你是"衔光管家"，一个诚实、克制的微信助手。
+    /** persona 缺省值（W13；与 V1.0.18 播种值逐字相等，可经 orchestration.persona 热改，仅管理员可写）。 */
+    private static final String PERSONA_DEFAULT = "你是\"衔光管家\"，一个诚实、克制的微信助手。";
+
+    /** 固定诚实原则尾段（BR-04 边界：能力与诚实原则不随 persona 配置改变）。 */
+    private static final String PRINCIPLES_FIXED = """
             原则：能力边界内尽力协助；不确定或无法获取信息时如实说明，绝不编造结果；
             参数缺失时先追问，不猜测执行。回答简洁、口语化。""";
 
@@ -268,16 +270,19 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
             return new OrchestrationResult(text, SessionState.IDLE, List.of(),
                     FallbackReason.INVALID_ARGS.name(), 0, 0);
         }
-        // W10/W11/W19：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」。
+        // W10/W11/W19/W16：本链路的工具下发口径只算一次，下发与执行共用——保证「看不见的工具也调不动」。
         // imageCachePresent = 该用户当前是否有可追问的识图缓存（W11；存储不可用按无缓存，fail-open）。
         // activeGame = 该用户当前进行中桌游的工具名（W19；存储不可用按无局，fail-open）。
+        // linkPresent = 本轮用户消息是否含链接（W16；当轮情境，read_link 的出现判据）。
         // 提前到消息构造之前：系统提示词的能力段（W12 真值化）与「帮助」指令依赖同一口径
         Set<String> disabled = disabledTools();
         boolean imageCached = recentImageStore != null
                 && recentImageStore.find(request.openid()).isPresent();
         String activeGame = gameStore == null ? null
                 : gameStore.find(request.openid()).map(session -> session.game().toolName()).orElse(null);
-        ToolVisibilityContext visibility = new ToolVisibilityContext(request.openid(), imageCached, activeGame);
+        boolean linkPresent = containsLink(request.userMessage());
+        ToolVisibilityContext visibility = new ToolVisibilityContext(request.openid(), imageCached,
+                activeGame, linkPresent);
 
         // W12/W20：「帮助」指令——确定性返回能力自述（与本轮实际下发集一致），不调 LLM、不计预算
         if (isHelpCommand(request.userMessage())) {
@@ -370,7 +375,8 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
         List<ChatMessage> messages = new ArrayList<>();
         // W12 能力清单真值化：能力段由「本轮实际可下发集」生成，不再静态断言（避免提示词
         // 声称已被灰度关闭/按上下文隐藏的工具，反成幻觉源）
-        messages.add(ChatMessage.system(SYSTEM_PROMPT + "\n\n"
+        // W13：persona 段可经 sys_config 热改（仅管理员），诚实原则尾段与能力段固定/真值化不变
+        messages.add(ChatMessage.system(persona() + "\n" + PRINCIPLES_FIXED + "\n\n"
                 + CapabilitySections.forPrompt(toolRegistry, disabled, visibility)));
         // W6 / §2.19：注入该用户的跨会话长期记忆（fail-open，读不到即本轮无背景知识）
         String memoryBlock = memoryRecallService == null ? null : memoryRecallService.buildRecallBlock(openid);
@@ -868,6 +874,21 @@ public class AgentOrchestratorImpl implements AgentOrchestrator {
      */
     private String dynamicString(String key, String fallback) {
         return dynamicConfig == null ? fallback : dynamicConfig.getString(key, fallback);
+    }
+
+    /** 链接探测模式（W16：http/https 前缀，供 linkPresent 情境信号）。 */
+    private static final java.util.regex.Pattern LINK_PATTERN =
+            java.util.regex.Pattern.compile("https?://\\S+", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** 本轮消息是否含链接（W16：read_link 的出现判据；http/https 前缀探测，供当轮情境信号）。 */
+    static boolean containsLink(String message) {
+        return message != null && LINK_PATTERN.matcher(message).find();
+    }
+
+    /** 管家 persona 段（W13）：sys_config 热读，缺失/为空回退内置缺省（与播种值逐字相等）。 */
+    private String persona() {
+        String configured = dynamicString(ConfigKeys.ORCHESTRATION_PERSONA, PERSONA_DEFAULT);
+        return configured == null || configured.isBlank() ? PERSONA_DEFAULT : configured;
     }
 
     /** 「帮助」指令词表（W12/W20：精确匹配，避免误伤含这些词的正常对话）。 */

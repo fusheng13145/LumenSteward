@@ -30,7 +30,7 @@ class ImageMessageHandlerTest {
 
     private static InternalMessage imageMessage(String picUrl) {
         return new InternalMessage("openid-img-handler", "image", "msg-img-1", null,
-                "media-1", picUrl, null, null, 0L, Map.of());
+                "media-1", picUrl, null, null, null, 0L, Map.of());
     }
 
     @Test
