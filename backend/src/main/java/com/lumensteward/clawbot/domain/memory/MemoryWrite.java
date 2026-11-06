@@ -6,7 +6,7 @@ import com.lumensteward.clawbot.common.enums.MemoryOrigin;
 import java.math.BigDecimal;
 
 /**
- * 个人状态库写入意图（迭代 4 W6）。
+ * 个人状态库写入意图（迭代 4 W6；W7/W8 增 dueSpec 供承诺分流）。
  *
  * <p>一条「候选事实」＝ 某用户关于某个 (kind, name) 的一条陈述。写入语义由
  * {@link MemoryStore#upsert} 决定（新增 / 覆盖 / 强化），调用方不做判断。
@@ -20,10 +20,21 @@ import java.math.BigDecimal;
  * @param confidence       抽取置信度 0.000~1.000（可空）
  * @param sourceSessionId  溯源：来源会话 id（可空）
  * @param sourceTraceId    溯源：来源链路标识（可空）
+ * @param dueSpec          到期时间表达（W7/W8，仅 kind=COMMITMENT 携带）：ISO-8601 或相对
+ *                         {@code +PTnM/nH/nD}；生长监听器据此路由至 {@code biz_commitment}，
+ *                         其余 kind 恒为 null
  */
 public record MemoryWrite(String openid, MemoryKind kind, String name, String content,
                           MemoryOrigin origin, String extractor, BigDecimal confidence,
-                          Long sourceSessionId, String sourceTraceId) {
+                          Long sourceSessionId, String sourceTraceId, String dueSpec) {
+
+    /** 兼容构造（W6 形态，无到期表达）。 */
+    public MemoryWrite(String openid, MemoryKind kind, String name, String content,
+                       MemoryOrigin origin, String extractor, BigDecimal confidence,
+                       Long sourceSessionId, String sourceTraceId) {
+        this(openid, kind, name, content, origin, extractor, confidence,
+                sourceSessionId, sourceTraceId, null);
+    }
 
     /** 是否为可写入的完整候选（缺一即丢弃，不落脏数据）。 */
     public boolean valid() {

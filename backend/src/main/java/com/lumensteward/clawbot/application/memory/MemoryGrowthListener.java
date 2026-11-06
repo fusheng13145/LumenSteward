@@ -4,9 +4,12 @@ import com.lumensteward.clawbot.application.config.ConfigKeys;
 import com.lumensteward.clawbot.application.config.DynamicConfigService;
 import com.lumensteward.clawbot.application.gray.GrayFeature;
 import com.lumensteward.clawbot.application.gray.GrayReleaseService;
+import com.lumensteward.clawbot.application.reminder.DueTimeResolver;
+import com.lumensteward.clawbot.common.enums.MemoryKind;
 import com.lumensteward.clawbot.common.util.MaskUtils;
 import com.lumensteward.clawbot.domain.memory.MemoryStore;
 import com.lumensteward.clawbot.domain.memory.MemoryWrite;
+import com.lumensteward.clawbot.domain.reminder.CommitmentStore;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +51,8 @@ public class MemoryGrowthListener {
 
     private final MemoryExtractor extractor;
     private final MemoryStore memoryStore;
+    private final CommitmentStore commitmentStore;
+    private final DueTimeResolver dueTimeResolver;
     private final DynamicConfigService dynamicConfig;
     private final GrayReleaseService grayRelease;
 
@@ -57,17 +62,22 @@ public class MemoryGrowthListener {
     private final ThreadPoolExecutor executor;
 
     /**
-     * 构造器注入（G-14）。
+     * Spring 装配用构造器（G-14）：承诺分流依赖齐备（W7/W8 形态）。
      *
-     * @param extractor     记忆抽取器
-     * @param memoryStore   状态库存储端口
-     * @param dynamicConfig 动态配置源
-     * @param grayRelease   灰度分流（FR-22：主开关开启后按比例/白名单逐用户放量）
+     * @param extractor       记忆抽取器
+     * @param memoryStore     状态库存储端口
+     * @param commitmentStore 承诺存储端口（COMMITMENT 分流目标，W7/W8）
+     * @param dueTimeResolver 到期时间解析器（登记时定格相对表达）
+     * @param dynamicConfig   动态配置源
+     * @param grayRelease     灰度分流（FR-22：主开关开启后按比例/白名单逐用户放量）
      */
     public MemoryGrowthListener(MemoryExtractor extractor, MemoryStore memoryStore,
+                               CommitmentStore commitmentStore, DueTimeResolver dueTimeResolver,
                                DynamicConfigService dynamicConfig, GrayReleaseService grayRelease) {
         this.extractor = extractor;
         this.memoryStore = memoryStore;
+        this.commitmentStore = commitmentStore;
+        this.dueTimeResolver = dueTimeResolver;
         this.dynamicConfig = dynamicConfig;
         this.grayRelease = grayRelease;
         this.executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
@@ -109,7 +119,18 @@ public class MemoryGrowthListener {
             int created = 0;
             int superseded = 0;
             int reinforced = 0;
+            int commitments = 0;
+            int skipped = 0;
             for (MemoryWrite write : candidates) {
+                // W7/W8：承诺类分流至 biz_commitment（不入状态库，避免被召回当「事实」注入）
+                if (write.kind() == MemoryKind.COMMITMENT) {
+                    if (registerCommitment(notice, write)) {
+                        commitments++;
+                    } else {
+                        skipped++;
+                    }
+                    continue;
+                }
                 MemoryStore.WriteOutcome outcome = memoryStore.upsert(write);
                 if (outcome == null) {
                     continue;
@@ -120,13 +141,38 @@ public class MemoryGrowthListener {
                     case REINFORCED -> reinforced++;
                 }
             }
-            log.info("状态库生长完成 openid={} 候选={} 新增={} 覆盖={} 强化={} 入队丢弃={}",
+            log.info("状态库生长完成 openid={} 候选={} 新增={} 覆盖={} 强化={} 承诺={} 丢弃候选={} 入队丢弃={}",
                     MaskUtils.openid(notice.openid()), candidates.size(),
-                    created, superseded, reinforced, dropped.get());
+                    created, superseded, reinforced, commitments, skipped, dropped.get());
         } catch (RuntimeException e) {
             log.warn("状态库生长失败（忽略，不影响已发出的回复）: openid={} err={}",
                     MaskUtils.openid(notice.openid()), e.getMessage());
         }
+    }
+
+    /**
+     * 承诺登记：due 可机读才登记（解析失败跳过并 warn——宁不登记也不猜时间，BR-09）；
+     * 无 due 的承诺项（真实模型偶发漏带）同样跳过。
+     *
+     * @return 是否登记成功
+     */
+    private boolean registerCommitment(MemoryGrowthNotice notice, MemoryWrite write) {
+        var dueAt = dueTimeResolver.resolve(write.dueSpec());
+        if (dueAt.isEmpty()) {
+            log.warn("承诺缺少可机读到期时间，跳过登记 openid={} name={} due={}",
+                    MaskUtils.openid(notice.openid()), write.name(), write.dueSpec());
+            return false;
+        }
+        long id = commitmentStore.register(notice.openid(), write.name() + "：" + write.content(),
+                dueAt.get(), notice.sessionId(), notice.traceId());
+        if (id <= 0) {
+            log.warn("承诺登记未生效（入参非法） openid={} name={}",
+                    MaskUtils.openid(notice.openid()), write.name());
+            return false;
+        }
+        log.info("承诺已登记 id={} openid={} 到期={} 内容={}",
+                id, MaskUtils.openid(notice.openid()), dueAt.get(), write.content());
+        return true;
     }
 
     /**

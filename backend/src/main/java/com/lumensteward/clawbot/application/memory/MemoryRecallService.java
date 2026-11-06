@@ -117,6 +117,8 @@ public class MemoryRecallService {
             case PREFERENCE -> "偏好";
             case HABIT -> "惯例";
             case FACT -> "事实";
+            // COMMITMENT 不入 biz_memory_item（V1.0.11 口径），防御性分支仅为穷尽枚举
+            case COMMITMENT -> "承诺";
         };
     }
 

@@ -209,7 +209,8 @@ public class ConfigAdminService {
         }
         if (entity.getConfigKey().startsWith(RATE_LIMIT_KEY_PREFIX)
                 || LLM_TIMEOUT_KEY.equals(entity.getConfigKey())
-                || ConfigKeys.LONGTASK_TIMEOUT_SECONDS.equals(entity.getConfigKey())) {
+                || ConfigKeys.LONGTASK_TIMEOUT_SECONDS.equals(entity.getConfigKey())
+                || ConfigKeys.REMINDER_MAX_PER_48H.equals(entity.getConfigKey())) {
             requirePositiveQuotaInt(entity, value, type);
         }
     }

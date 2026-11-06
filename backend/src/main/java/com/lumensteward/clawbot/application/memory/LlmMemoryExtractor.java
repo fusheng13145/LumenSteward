@@ -54,14 +54,15 @@ public class LlmMemoryExtractor implements MemoryExtractor {
     private static final int HARD_MAX_ITEMS = 10;
 
     private static final String SYSTEM_PROMPT = """
-            你是"衔光管家"的记忆抽取器。从下面这轮对话中抽取【用户亲口说出的、可跨会话复用的长期事实】，只输出 JSON。
+            你是"衔光管家"的记忆抽取器。从下面这轮对话中抽取【用户亲口说出的、可跨会话复用的长期事实】与【用户亲口托付的提醒】，只输出 JSON。
             格式：{"items":[{"kind":"PERSON|PLACE|THING|PREFERENCE|HABIT|FACT","name":"实体名或偏好键","content":"一句话事实(≤60字)","confidence":0.0-1.0}]}
+            承诺/提醒类额外规则：用户明确托付"记住 / 提醒我 / 到点叫我"时，输出 {"kind":"COMMITMENT","name":"提醒标题(≤20字)","content":"要提醒的事(≤60字)","due":"可机读到期时间","confidence":0.0-1.0}；
+            due 只接受两种格式：ISO-8601（如 2026-11-07T15:00）或相对时长 +PT30M / +PT2H / +P1D；对话中没有可机读的时间信息就不要输出该条，绝不猜时间。
             规则：
-            1) 只抽用户明确陈述的内容；提问、推测、一次性请求、当下才成立的信息一律不抽；
-            2) 承诺、待办、提醒不抽（属另一子系统）；
-            3) 没有合格事实就输出 {"items":[]}，不要凑数；
-            4) 不复述手机号、证件号、密钥等敏感原文，用关系或类别代替；
-            5) 只输出 JSON，不要任何解释文字。""";
+            1) 只抽用户明确陈述的内容；提问、推测、当下才成立的信息一律不抽；
+            2) 没有合格事实与托付就输出 {"items":[]}，不要凑数；
+            3) 不复述手机号、证件号、密钥等敏感原文，用关系或类别代替；
+            4) 只输出 JSON，不要任何解释文字。""";
 
     private final LlmClient llmClient;
     /** 成本预算服务（可为 null，此时不计入日预算）。 */
@@ -128,7 +129,8 @@ public class LlmMemoryExtractor implements MemoryExtractor {
                     kind == null ? MemoryKind.FACT : kind,
                     name, fact, MemoryOrigin.AUTO_EXTRACT, EXTRACTOR_ID,
                     confidenceOf(item.get("confidence")),
-                    notice.sessionId(), notice.traceId()));
+                    notice.sessionId(), notice.traceId(),
+                    textOf(item, "due")));
         }
         return writes;
     }

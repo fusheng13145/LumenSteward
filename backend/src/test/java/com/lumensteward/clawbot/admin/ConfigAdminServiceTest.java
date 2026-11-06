@@ -289,6 +289,20 @@ class ConfigAdminServiceTest {
     }
 
     @Test
+    @DisplayName("W7/W8 提醒预算：reminder.max-per-48h 置 0/负数拒绝（每调必超限的不可用配置）")
+    void shouldRejectNonPositiveReminderBudget() {
+        for (String bad : new String[]{"0", "-1"}) {
+            when(mapper.selectOne(any()))
+                    .thenReturn(entity("reminder.max-per-48h", "5", "INT"));
+            assertThatThrownBy(() -> service.update(
+                    List.of(new ConfigAdminService.ConfigItem("reminder.max-per-48h", bad)),
+                    "非法预算", 1L, "127.0.0.1"))
+                    .as("提醒预算非正整数应被拒: %s", bad)
+                    .isInstanceOf(BizException.class);
+        }
+    }
+
+    @Test
     @DisplayName("W13 音色目录：合法 JSON 数组放行，非法 JSON / 空数组 / 非字符串元素一律拒绝")
     void shouldValidateVoiceCatalog() {
         when(mapper.selectOne(any())).thenReturn(entity("tts.voice-catalog", "[]", "JSON"));

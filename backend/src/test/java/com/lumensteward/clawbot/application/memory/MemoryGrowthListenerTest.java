@@ -39,8 +39,11 @@ class MemoryGrowthListenerTest {
     private final DynamicConfigService config = mock(DynamicConfigService.class);
     /** 真实灰度判定（配置仍为桩），确保监听器与灰度闸门的接线本身被验证。 */
     private final GrayReleaseService grayRelease = new GrayReleaseService(config);
+    private final com.lumensteward.clawbot.domain.reminder.CommitmentStore commitmentStore =
+            mock(com.lumensteward.clawbot.domain.reminder.CommitmentStore.class);
     private final MemoryGrowthListener listener =
-            new MemoryGrowthListener(extractor, memoryStore, config, grayRelease);
+            new MemoryGrowthListener(extractor, memoryStore, commitmentStore,
+                    new com.lumensteward.clawbot.application.reminder.DueTimeResolver(), config, grayRelease);
 
     @AfterEach
     void tearDown() {
@@ -60,6 +63,39 @@ class MemoryGrowthListenerTest {
     private static MemoryWrite candidate(String name) {
         return new MemoryWrite("openid-1", null, name, "内容", null, null,
                 BigDecimal.ONE, null, null);
+    }
+
+    @Test
+    @DisplayName("W7/W8：COMMITMENT 候选分流至承诺存储（不入状态库），due 按解析时刻定格")
+    void routesCommitmentToCommitmentStore() {
+        enableGrowth();
+        MemoryWrite commitment = new MemoryWrite("openid-1", com.lumensteward.clawbot.common.enums.MemoryKind.COMMITMENT,
+                "咪咪疫苗", "带咪咪去打疫苗", com.lumensteward.clawbot.common.enums.MemoryOrigin.AUTO_EXTRACT,
+                null, BigDecimal.ONE, 7L, "trace-1", "+PT30M");
+        when(extractor.extract(any(), anyInt())).thenReturn(List.of(commitment));
+
+        listener.onConversationTurn(notice("记得提醒我半小时后带咪咪去打疫苗"));
+
+        org.mockito.Mockito.verify(commitmentStore, timeout(3000).times(1))
+                .register(eq("openid-1"), org.mockito.ArgumentMatchers.contains("咪咪疫苗"),
+                        org.mockito.ArgumentMatchers.any(), eq(7L), eq("trace-1"));
+        verify(memoryStore, after(500).never()).upsert(any());
+    }
+
+    @Test
+    @DisplayName("W7/W8：due 不可机读的承诺跳过登记（宁不登记不猜时间，BR-09）")
+    void skipsCommitmentWithoutReadableDue() {
+        enableGrowth();
+        MemoryWrite bad = new MemoryWrite("openid-1", com.lumensteward.clawbot.common.enums.MemoryKind.COMMITMENT,
+                "模糊提醒", "记得那件事", com.lumensteward.clawbot.common.enums.MemoryOrigin.AUTO_EXTRACT,
+                null, BigDecimal.ONE, 7L, "trace-1", "明天下午");
+        when(extractor.extract(any(), anyInt())).thenReturn(List.of(bad));
+
+        listener.onConversationTurn(notice("记得提醒我明天下午那件事"));
+
+        org.mockito.Mockito.verify(commitmentStore, after(500).never())
+                .register(any(), any(), any(), any(), any());
+        verify(memoryStore, after(500).never()).upsert(any());
     }
 
     @Test

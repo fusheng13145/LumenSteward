@@ -16,8 +16,9 @@ class HttpLinkFetcherTest {
     @Test
     @DisplayName("协议白名单：http/https 放行；file/ftp/未知协议拒绝")
     void shouldRejectNonHttpSchemes() {
-        assertThatCode(() -> HttpLinkFetcher.validate("https://example.com/page")).doesNotThrowAnyException();
-        assertThatCode(() -> HttpLinkFetcher.validate("http://example.com/page")).doesNotThrowAnyException();
+        // 正向用例用字面量公网 IP（免 DNS，离线确定性——沙箱 DNS 间歇性失效的 W16 教训）
+        assertThatCode(() -> HttpLinkFetcher.validate("https://93.184.216.34/page")).doesNotThrowAnyException();
+        assertThatCode(() -> HttpLinkFetcher.validate("http://93.184.216.34/page")).doesNotThrowAnyException();
 
         for (String bad : new String[]{"file:///etc/passwd", "ftp://example.com/a",
                 "gopher://x", "javascript:alert(1)", "example.com/no-scheme"}) {
@@ -30,12 +31,12 @@ class HttpLinkFetcherTest {
     @Test
     @DisplayName("端口白名单：仅 80/443；8080/元数据端口拒绝")
     void shouldRejectNonStandardPorts() {
-        assertThatCode(() -> HttpLinkFetcher.validate("https://example.com:443/a")).doesNotThrowAnyException();
-        assertThatCode(() -> HttpLinkFetcher.validate("http://example.com:80/a")).doesNotThrowAnyException();
+        assertThatCode(() -> HttpLinkFetcher.validate("https://93.184.216.34:443/a")).doesNotThrowAnyException();
+        assertThatCode(() -> HttpLinkFetcher.validate("http://93.184.216.34:80/a")).doesNotThrowAnyException();
 
-        assertThatThrownBy(() -> HttpLinkFetcher.validate("http://example.com:8080/a"))
+        assertThatThrownBy(() -> HttpLinkFetcher.validate("http://93.184.216.34:8080/a"))
                 .isInstanceOf(LinkFetchException.class);
-        assertThatThrownBy(() -> HttpLinkFetcher.validate("http://example.com:8443/a"))
+        assertThatThrownBy(() -> HttpLinkFetcher.validate("http://93.184.216.34:8443/a"))
                 .isInstanceOf(LinkFetchException.class);
     }
 

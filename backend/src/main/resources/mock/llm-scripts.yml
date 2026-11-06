@@ -19,6 +19,18 @@ rules:
   # ---- 个人状态库生长（W6）：抽取器请求的载荷以【记忆抽取】开头，必须置于首位 ----
   # 置于首位的原因：载荷内嵌用户原文，若排在后面会被 pet-create-toolcall 等
   # 关键词规则（如「叫」）抢先命中，导致抽取拿到的不是 JSON。
+  # ---- W7/W8 承诺分流：载荷含「提醒我」→ 抽取输出 COMMITMENT 项（due 相对表达，登记时定格） ----
+  # 必须排在 memory-extract 之前（先具体后一般）；due 用相对时长 +PTnM（登记即定格绝对时间，
+  # 供取证在分钟级看到投递）。既有 W6 用例的载荷不含「提醒我」，落空后照旧命中 memory-extract。
+  - name: memory-extract-commitment
+    round: 0
+    match: "提醒我"
+    finishReason: stop
+    usage:
+      prompt: 430
+      completion: 90
+    content: '{"items":[{"kind":"COMMITMENT","name":"咪咪疫苗","content":"带咪咪去打疫苗","due":"+PT2M","confidence":0.9}]}'
+
   - name: memory-extract
     round: 0
     match: "【记忆抽取】"

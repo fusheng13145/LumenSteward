@@ -131,6 +131,14 @@ public final class ConfigKeys {
     /** 单个长任务执行超时（秒，超时置 FAILED/TIMEOUT）。 */
     public static final String LONGTASK_TIMEOUT_SECONDS = "longtask.timeout-seconds";
 
+    // ===== 到期提醒（W7/W8 最小提醒切片 / 迭代 4）=====
+
+    /** 到期提醒投递调度开关（默认开；登记随 memory.growth 闸门走）。 */
+    public static final String REMINDER_ENABLED = "reminder.enabled";
+
+    /** 同一用户 48h 固定窗口内最多投递的提醒条数（客服消息频控的保守近似）。 */
+    public static final String REMINDER_MAX_PER_48H = "reminder.max-per-48h";
+
     private ConfigKeys() {
     }
 }
